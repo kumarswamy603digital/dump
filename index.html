@@ -3,123 +3,132 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Research Workspace — Where research finds its flow</title>
-  <meta name="description" content="A quiet home for the PDFs, notes, links, and images you actually come back to. Organize with the calm of paper, find with the speed of software." />
+  <title>Dump — drop it here, we'll sort it out</title>
+  <meta name="description" content="Dump links, reels, PDFs and screenshots. AI sorts them into the right shelf. Approve, and they flow into your library." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>" />
 </head>
-<body class="landing">
+<body class="dumping">
   <!-- Nav -->
   <header class="lp-nav">
     <a class="brand" href="index.html">
-      <span class="ic brand-ic">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-      </span>
-      <span class="brand-name">Research Workspace</span>
+      <span class="ic brand-ic" data-icon="book-open"></span>
+      <span class="brand-name">Dump</span>
     </a>
-    <a class="btn btn-primary btn-sm" href="app.html">Open library</a>
+    <div class="lp-nav-actions">
+      <button class="ai-chip" id="aiChip" title="Connect Groq AI">
+        <span class="ic" data-icon="sparkles"></span>
+        <span id="aiChipLabel">AI: rule-based</span>
+      </button>
+      <a class="btn btn-primary btn-sm" href="app.html">
+        Open library <span class="ic" data-icon="arrow-right"></span>
+      </a>
+    </div>
   </header>
 
   <main>
-    <!-- Hero -->
-    <section class="lp-hero">
-      <span class="lp-pill"><span class="lp-dot"></span> Your private research workspace</span>
-      <h1 class="lp-title">Where research<br />finds its <em>flow.</em></h1>
+    <!-- Hero / dump zone -->
+    <section class="dump-hero">
+      <span class="lp-pill"><span class="lp-dot"></span> Your private dump</span>
+      <h1 class="lp-title">Dump it <em>here.</em></h1>
       <p class="lp-sub">
-        A quiet home for the PDFs, notes, links, and images you actually come back to.
-        Organize with the calm of paper, find with the speed of software.
+        Drop links, reels, PDFs and screenshots. The AI reads each one and files it
+        into the right shelf below. Review, then send it all to your library.
       </p>
-      <div class="lp-cta">
-        <a class="btn btn-primary btn-lg" href="app.html">
-          Open your workspace
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
-        </a>
-        <a class="btn btn-outline btn-lg" href="app.html">Sign in</a>
-      </div>
-      <p class="lp-note">Free to start · no account needed · lives privately in your browser</p>
-    </section>
 
-    <!-- Features -->
-    <section class="lp-section" id="features">
-      <div class="lp-eyebrow">Why it feels different</div>
-      <div class="lp-features">
-        <article class="lp-feature">
-          <span class="lp-feature-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
-          </span>
-          <h3>Everything in one calm place</h3>
-          <p>PDFs, notes, links and images living together — no more scattering ideas across a dozen tabs and apps.</p>
-        </article>
-        <article class="lp-feature">
-          <span class="lp-feature-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
-          </span>
-          <h3>It sorts itself</h3>
-          <p>Drop a file or paste a link and it lands on the right shelf automatically. You dump — we file.</p>
-        </article>
-        <article class="lp-feature">
-          <span class="lp-feature-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          </span>
-          <h3>Find it in a keystroke</h3>
-          <p>Search across everything you've ever saved. What went in comes back the moment you need it.</p>
-        </article>
+      <div class="dropzone" id="dropzone" tabindex="0">
+        <div class="dropzone-inner">
+          <span class="ic dropzone-icon" data-icon="upload"></span>
+          <p class="dropzone-title">Drag &amp; drop anything here</p>
+          <p class="dropzone-hint">reels · links · PDFs · screenshots · photos</p>
+          <label class="file-pick">
+            <input type="file" id="fileInput" multiple hidden
+                   accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+            <span class="btn btn-outline">Browse files</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="paste-row">
+        <input type="text" id="linkInput" class="link-input"
+               placeholder="Paste a link or note and press Enter — Instagram, YouTube, docs, PDFs…" autocomplete="off" />
+        <button class="btn btn-primary" id="addLinkBtn">Dump it</button>
       </div>
     </section>
 
-    <!-- How it works -->
-    <section class="lp-section" id="how">
-      <div class="lp-eyebrow">How it works</div>
-      <h2 class="lp-section-title">Three steps. Zero organizing.</h2>
-      <div class="lp-steps">
-        <div class="lp-step">
-          <span class="lp-step-num">01</span>
-          <h3>Dump it in</h3>
-          <p>Drag a file or paste a link — a reel, an article, a PDF, a screenshot.</p>
+    <!-- Today's dump -->
+    <section class="staging" id="staging">
+      <div class="staging-head">
+        <div>
+          <h2 class="staging-title">Today's dump</h2>
+          <p class="staging-status" id="stagingStatus">Nothing dumped yet — drop something above.</p>
         </div>
-        <div class="lp-step">
-          <span class="lp-step-num">02</span>
-          <h3>It sorts itself</h3>
-          <p>We read it and file it under PDFs, Notes, Links or Images instantly.</p>
+        <button class="btn btn-primary" id="approveBtn" disabled>
+          <span class="ic" data-icon="check"></span>
+          Approve <span id="approveCount">0</span> &amp; send to library
+        </button>
+      </div>
+
+      <div class="sections" id="sections">
+        <!-- Four section columns -->
+        <div class="section-col" data-section="reels">
+          <div class="section-col-head"><span class="ic" data-icon="video"></span><h3>Reels</h3><span class="section-col-count" data-scount="reels">0</span></div>
+          <div class="section-col-body" data-body="reels"></div>
         </div>
-        <div class="lp-step">
-          <span class="lp-step-num">03</span>
-          <h3>Come back anytime</h3>
-          <p>It's waiting, organized and searchable, whenever inspiration strikes.</p>
+        <div class="section-col" data-section="pdfs">
+          <div class="section-col-head"><span class="ic" data-icon="file-text"></span><h3>PDFs &amp; Docs</h3><span class="section-col-count" data-scount="pdfs">0</span></div>
+          <div class="section-col-body" data-body="pdfs"></div>
+        </div>
+        <div class="section-col" data-section="links">
+          <div class="section-col-head"><span class="ic" data-icon="link"></span><h3>Links</h3><span class="section-col-count" data-scount="links">0</span></div>
+          <div class="section-col-body" data-body="links"></div>
+        </div>
+        <div class="section-col" data-section="screenshots">
+          <div class="section-col-head"><span class="ic" data-icon="image"></span><h3>Screenshots</h3><span class="section-col-count" data-scount="screenshots">0</span></div>
+          <div class="section-col-body" data-body="screenshots"></div>
         </div>
       </div>
-    </section>
-
-    <!-- Closing CTA -->
-    <section class="lp-final">
-      <h2>Give your research a home.</h2>
-      <p>Start your quiet, self-sorting workspace in seconds — no account required.</p>
-      <a class="btn btn-primary btn-lg" href="app.html">
-        Open your workspace
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
-      </a>
     </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="lp-footer">
-    <div class="lp-footer-inner">
-      <a class="brand" href="index.html">
-        <span class="ic brand-ic">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        </span>
-        <span class="brand-name">Research Workspace</span>
-      </a>
-      <nav class="lp-footer-links">
-        <a href="#features">Features</a>
-        <a href="#how">How it works</a>
-        <a href="app.html">Open library</a>
-      </nav>
+  <!-- AI settings modal -->
+  <div class="modal-overlay" id="aiModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+      <div class="modal-head">
+        <h3 id="aiModalTitle">Connect Groq AI</h3>
+        <button class="icon-btn" id="aiModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub">
+        Paste your Groq API key to let AI classify what you dump. Without it, Dump still
+        sorts everything using fast built-in rules. Your key is stored only in this browser.
+      </p>
+      <input type="password" id="groqKeyInput" class="modal-input" placeholder="gsk_… your Groq API key" autocomplete="off" />
+      <p class="modal-fineprint">
+        Get a free key at <span class="link-accent">console.groq.com/keys</span>.
+        For production, proxy requests through your own backend to keep the key secret.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="groqRemove">Remove key</button>
+        <button class="btn btn-primary" id="groqSave">Save key</button>
+      </div>
     </div>
-    <p class="lp-footer-note">© 2026 Research Workspace · A quiet home for the things you come back to.</p>
-  </footer>
+  </div>
+
+  <!-- Full-page drop overlay -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-overlay-inner">
+      <span class="ic" data-icon="upload"></span>
+      <p>Drop to dump it</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="core.js"></script>
+  <script src="dump.js"></script>
 </body>
 </html>
