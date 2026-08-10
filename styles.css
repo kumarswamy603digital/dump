@@ -822,3 +822,18 @@ body {
   .item-title { font-size: 13.5px; }
   .item-actions, .item-controls { padding-left: 10px; padding-right: 10px; }
 }
+
+
+/* ============================================================
+   First-page / image previews (overlay on top of the type icon)
+   ============================================================ */
+.item-thumb .thumb-ic, .dcard-thumb .thumb-ic { position: relative; z-index: 0; }
+.thumb-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: top center; background: #fff; z-index: 1;
+  animation: fadeIn 0.3s var(--ease);
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.item-thumb .star-btn { z-index: 3; }
+.item-thumb .type-tag { z-index: 2; }
+.dcard-thumb { position: relative; }

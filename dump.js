@@ -122,17 +122,16 @@ async function approveAll() {
 
 function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
+  let overlay = "";
   if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
-    if (src) return `<div class="dcard-thumb"><img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" onerror="this.closest('.dcard-thumb').classList.add('tinted');this.replaceWith(Object.assign(document.createElement('span'),{className:'thumb-ic ic',innerHTML:ICONS.image}))" /></div>`;
+    if (src) overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(src)}" onerror="this.remove()" alt="" />`;
+  } else if (item.category === "doc" && item.hasFile) {
+    overlay = `<img class="thumb-img" data-pdf="${item.id}" data-pdf-url="${esc(Items.fileUrl(item))}" onerror="this.remove()" alt="" />`;
+  } else if (item.thumbnail) {
+    overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(item.thumbnail)}" onerror="this.remove()" alt="" />`;
   }
-  if (item.category === "doc" && item.hasFile) {
-    return `<div class="dcard-thumb pdf"><iframe class="pdf-frame" src="${esc(Items.fileUrl(item))}#toolbar=0&navpanes=0&view=FitH" title="PDF preview"></iframe></div>`;
-  }
-  if (item.thumbnail) {
-    return `<div class="dcard-thumb"><img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}" onerror="this.remove()" /></div>`;
-  }
-  return `<div class="dcard-thumb tinted"><span class="thumb-ic ic">${ICONS[meta.icon]}</span></div>`;
+  return `<div class="dcard-thumb ${overlay ? "" : "tinted"}"><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}</div>`;
 }
 
 function sectionSelect(item) {
@@ -167,6 +166,7 @@ function render() {
     bodyEl.innerHTML = list.length ? list.map(dumpCardHtml).join("") : `<div class="section-empty">Nothing here yet</div>`;
   });
   document.querySelectorAll("[data-scount]").forEach((el) => { el.textContent = counts[el.dataset.scount]; });
+  hydratePdfThumbs(document.getElementById("sections"));
   approveCount.textContent = staged.length;
   approveBtn.disabled = staged.length === 0 || busy > 0;
   updateStatus();

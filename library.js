@@ -110,15 +110,18 @@ function starBtn(item) {
 function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
   const tint = `thumb-tint-${bucketOf(item.category)}`;
+  let overlay = "";
   if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
-    if (src) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
+    if (src) overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(src)}" onerror="this.remove()" alt="" />`;
+  } else if (item.category === "doc" && item.hasFile) {
+    // Stored PDF: render page 1 via PDF.js (hydrated after render)
+    overlay = `<img class="thumb-img" data-pdf="${item.id}" data-pdf-url="${esc(Items.fileUrl(item))}" onerror="this.remove()" alt="" />`;
+  } else if (item.thumbnail) {
+    // Google Docs/Drive first-page thumbnail, YouTube, etc.
+    overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(item.thumbnail)}" onerror="this.remove()" alt="" />`;
   }
-  if (item.category === "doc" && item.hasFile) {
-    return `<div class="item-thumb pdf">${starBtn(item)}<iframe class="pdf-frame" src="${esc(Items.fileUrl(item))}#toolbar=0&navpanes=0&view=FitH" title="${esc(item.title)}"></iframe></div>`;
-  }
-  if (item.thumbnail) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}" onerror="this.remove()" /></div>`;
-  return `<div class="item-thumb ${tint}">${starBtn(item)}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span><span class="thumb-ic ic">${ICONS[meta.icon]}</span></div>`;
+  return `<div class="item-thumb ${tint}">${starBtn(item)}<span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
 }
 function sectionSelect(item) {
   const opts = ['<option value="">No section</option>']
@@ -189,6 +192,7 @@ function renderPinned() {
       ${col("PDFs & Docs", "file-text", groups.pdfs)}
       ${col("Images", "image", groups.images)}
     </div>`;
+  hydratePdfThumbs(vaultView);
   countLabel.textContent = `${list.length} pinned`;
 }
 
@@ -236,6 +240,7 @@ function render() {
   const label = activeView.startsWith("sec:") ? ` in ${sectionName(activeView.slice(4))}` : "";
   countLabel.textContent = `${list.length} item${list.length === 1 ? "" : "s"}${label}`;
   grid.innerHTML = list.map(cardHtml).join("");
+  hydratePdfThumbs(grid);
 
   if (list.length === 0) {
     emptyState.style.display = "flex";

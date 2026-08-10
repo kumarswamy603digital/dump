@@ -61,9 +61,13 @@ function detectLink(raw) {
     if (path.includes("/spreadsheets")) kind = "Google Sheet";
     else if (path.includes("/presentation")) kind = "Google Slides";
     else if (path.includes("/forms")) kind = "Google Form";
-    return { ...base, category: "doc", title: kind, subtitle: host };
+    const gid = (u.pathname.match(/\/d\/([\w-]+)/) || [])[1];
+    return { ...base, category: "doc", title: kind, subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
   }
-  if (host === "drive.google.com") return { ...base, category: "doc", title: "Google Drive file", subtitle: host };
+  if (host === "drive.google.com") {
+    const gid = (u.pathname.match(/\/d\/([\w-]+)/) || [])[1] || u.searchParams.get("id");
+    return { ...base, category: "doc", title: "Google Drive file", subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
+  }
   if (/\.(docx?|pptx?|xlsx?|odt|rtf|txt|csv|key|pages)$/.test(path)) return { ...base, category: "doc", title: filenameFromUrl(u) || "Document", subtitle: host };
   if (/(^|\.)notion\.(so|site)$/.test(host) || host.includes("officeapps.live.com")) return { ...base, category: "doc", title: "Document", subtitle: host };
   if (/\.(png|jpe?g|gif|webp|svg|avif|bmp)$/.test(path)) return { ...base, category: "photo", title: filenameFromUrl(u) || "Image", subtitle: host, thumbnail: full };
@@ -216,4 +220,60 @@ function toast(msg) {
   el.classList.add("show");
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+}
+
+
+/* ---------------- PDF first-page thumbnails (PDF.js, lazy-loaded) ----------------
+   Renders page 1 of a stored PDF to a small image, so document cards show
+   a real first-page preview. Loaded from CDN only when needed; degrades to
+   the doc icon if unavailable (e.g. offline).                                    */
+
+const PDFJS_VER = "3.11.174";
+let _pdfjsPromise = null;
+function loadPdfJs() {
+  if (typeof window !== "undefined" && window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (_pdfjsPromise) return _pdfjsPromise;
+  _pdfjsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.min.js`;
+    s.onload = () => {
+      try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.worker.min.js`; } catch {}
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => reject(new Error("Failed to load PDF.js"));
+    document.head.appendChild(s);
+  });
+  return _pdfjsPromise;
+}
+
+const _pdfThumbCache = new Map(); // itemId -> dataURL
+async function renderPdfThumb(id, url, img) {
+  if (!img) return;
+  if (_pdfThumbCache.has(id)) { img.src = _pdfThumbCache.get(id); return; }
+  try {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ url }).promise;
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const scale = 460 / base.width;
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(vp.width);
+    canvas.height = Math.ceil(vp.height);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    const data = canvas.toDataURL("image/jpeg", 0.82);
+    _pdfThumbCache.set(id, data);
+    img.src = data;
+  } catch (e) {
+    img.remove(); // fall back to the icon underneath
+  }
+}
+
+// Render first-page previews for any PDF <img data-pdf> that isn't hydrated yet.
+function hydratePdfThumbs(root = document) {
+  root.querySelectorAll("img[data-pdf]").forEach((img) => {
+    if (img.dataset.hydrated) return;
+    img.dataset.hydrated = "1";
+    renderPdfThumb(img.getAttribute("data-pdf"), img.getAttribute("data-pdf-url"), img);
+  });
 }
