@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dump — Your personal resource vault</title>
+  <meta name="description" content="Drop links, reels, photos and docs. Dump auto-sorts everything into the right place." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>" />
+</head>
+<body>
+  <!-- Ambient background -->
+  <div class="bg-orbs" aria-hidden="true">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+  </div>
+
+  <!-- Nav -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#">
+        <span class="brand-mark">📥</span>
+        <span class="brand-name">Dump</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#capture">Capture</a>
+        <a href="#library">Library</a>
+        <button id="themeToggle" class="ghost-btn" title="Toggle theme" aria-label="Toggle theme">🌗</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero" id="capture">
+    <div class="hero-content">
+      <span class="pill">Your second brain for the internet</span>
+      <h1>Dump it here.<br /><span class="grad-text">We'll sort it out.</span></h1>
+      <p class="subtitle">
+        Drop links, Instagram reels, screenshots, PDFs and docs. Dump detects what
+        each thing is and files it into the right place — automatically.
+      </p>
+
+      <!-- Drop / paste zone -->
+      <div class="dropzone" id="dropzone" tabindex="0">
+        <div class="dropzone-inner">
+          <div class="dropzone-icon">⬇️</div>
+          <p class="dropzone-title">Drag &amp; drop files here</p>
+          <p class="dropzone-hint">images · screenshots · PDFs · docs</p>
+          <label class="file-pick">
+            <input type="file" id="fileInput" multiple hidden
+                   accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+            <span class="btn btn-secondary">Or browse files</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="paste-row">
+        <input type="text" id="linkInput" class="link-input"
+               placeholder="Paste a link or note and press Enter — reels, YouTube, docs, PDFs, anything…"
+               autocomplete="off" />
+        <button class="btn btn-primary" id="addLinkBtn">Add</button>
+      </div>
+      <p class="paste-tip">Tip: paste several links at once (one per line) and we'll file each of them.</p>
+    </div>
+  </section>
+
+  <!-- Library -->
+  <section class="library" id="library">
+    <div class="library-head">
+      <div>
+        <h2>Your library</h2>
+        <p class="muted" id="countLabel">Nothing saved yet</p>
+      </div>
+      <div class="search-wrap">
+        <input type="search" id="searchInput" class="search-input" placeholder="Search your dump…" />
+      </div>
+    </div>
+
+    <!-- Category tabs -->
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-cat="all">All <span class="tab-count" data-count="all">0</span></button>
+      <button class="tab" data-cat="reel">🎬 Reels <span class="tab-count" data-count="reel">0</span></button>
+      <button class="tab" data-cat="video">▶️ Videos <span class="tab-count" data-count="video">0</span></button>
+      <button class="tab" data-cat="doc">📄 Docs <span class="tab-count" data-count="doc">0</span></button>
+      <button class="tab" data-cat="photo">🖼️ Photos <span class="tab-count" data-count="photo">0</span></button>
+      <button class="tab" data-cat="link">🔗 Links <span class="tab-count" data-count="link">0</span></button>
+    </div>
+
+    <!-- Grid -->
+    <div class="grid" id="grid"></div>
+
+    <!-- Empty state -->
+    <div class="empty" id="emptyState">
+      <div class="empty-emoji">🗂️</div>
+      <h3>Nothing here yet</h3>
+      <p>Drop a file or paste a link above to start building your vault.</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>Built with Dump · everything is stored privately in your browser.</p>
+  </footer>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
