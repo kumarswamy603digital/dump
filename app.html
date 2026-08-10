@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Research Workspace</title>
+  <meta name="description" content="Upload a PDF or image, jot a note, or save a link. Your calm home for research." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" />
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="topbar">
+    <a class="brand" href="index.html" title="Back to home">
+      <span class="ic brand-ic" data-icon="book-open"></span>
+      <span class="brand-name">Research Workspace</span>
+    </a>
+
+    <div class="search">
+      <span class="ic search-ic" data-icon="search"></span>
+      <input type="search" id="searchInput" class="search-input" placeholder="Search…" autocomplete="off" />
+      <kbd class="kbd">⌘K</kbd>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="btn btn-primary" id="addBtn">
+        <span class="ic" data-icon="plus"></span> Add
+      </button>
+      <button class="icon-btn" id="logoutBtn" title="Sign out" aria-label="Sign out">
+        <span class="ic" data-icon="log-out"></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- App body -->
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="all">
+          <span class="ic" data-icon="book-open"></span>
+          <span class="nav-label">All items</span>
+          <span class="nav-count" data-count="all">0</span>
+        </button>
+        <button class="nav-item" data-view="docs">
+          <span class="ic" data-icon="file-text"></span>
+          <span class="nav-label">PDFs &amp; Docs</span>
+          <span class="nav-count" data-count="docs">0</span>
+        </button>
+        <button class="nav-item" data-view="notes">
+          <span class="ic" data-icon="notebook"></span>
+          <span class="nav-label">Notes</span>
+          <span class="nav-count" data-count="notes">0</span>
+        </button>
+        <button class="nav-item" data-view="links">
+          <span class="ic" data-icon="link"></span>
+          <span class="nav-label">Links</span>
+          <span class="nav-count" data-count="links">0</span>
+        </button>
+        <button class="nav-item" data-view="images">
+          <span class="ic" data-icon="image"></span>
+          <span class="nav-label">Images</span>
+          <span class="nav-count" data-count="images">0</span>
+        </button>
+        <button class="nav-item" data-view="starred">
+          <span class="ic" data-icon="star"></span>
+          <span class="nav-label">Starred</span>
+          <span class="nav-count" data-count="starred">0</span>
+        </button>
+      </nav>
+
+      <div class="shortcuts">
+        <p class="shortcuts-title">Shortcuts</p>
+        <p class="shortcuts-row"><kbd class="kbd sm">⌘K</kbd> search · <kbd class="kbd sm">N</kbd> new</p>
+        <p class="shortcuts-hint">Drop files anywhere to upload.</p>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="main-head">
+        <p class="item-count" id="countLabel">0 items</p>
+        <div class="sort">
+          <span class="ic sort-ic" data-icon="arrow-up-down"></span>
+          <div class="select-wrap">
+            <select id="sortSelect" class="select">
+              <option value="new">Newest first</option>
+              <option value="old">Oldest first</option>
+              <option value="az">Title A–Z</option>
+            </select>
+            <span class="ic select-chevron" data-icon="chevron-down"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item grid -->
+      <div class="grid" id="grid"></div>
+
+      <!-- Empty state -->
+      <div class="empty-card" id="emptyState">
+        <div class="empty-circle"><span class="ic" data-icon="book-open"></span></div>
+        <h2 class="empty-title" id="emptyTitle">Your workspace is empty</h2>
+        <p class="empty-text" id="emptyText">
+          Upload a <span class="link-accent">PDF</span> or image, jot a note, or save a link.
+          You can also drop files anywhere on this page.
+        </p>
+        <button class="btn btn-primary" id="addFirstBtn">
+          <span class="ic" data-icon="plus"></span> Add first item
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add modal -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h3 id="modalTitle">Add to your workspace</h3>
+        <button class="icon-btn" id="modalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub">Paste a link or note, or upload a file. We'll figure out where it goes.</p>
+      <div class="modal-field">
+        <input type="text" id="linkInput" class="modal-input"
+               placeholder="Paste a link or type a note, then press Enter…" autocomplete="off" />
+      </div>
+      <label class="modal-drop" id="modalDrop">
+        <input type="file" id="fileInput" multiple hidden
+               accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+        <span class="ic" data-icon="upload"></span>
+        <span>Click to browse files, or drop them anywhere</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+        <button class="btn btn-primary" id="addLinkBtn">Add to workspace</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full-page drop overlay -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-overlay-inner">
+      <span class="ic" data-icon="upload"></span>
+      <p>Drop to add to your workspace</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
