@@ -3,377 +3,149 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dump — Your second brain for the internet</title>
-  <meta name="description" content="Drop links, Instagram reels, screenshots, PDFs and docs. Dump auto-detects what each thing is and files it into the right place — automatically." />
+  <title>Research Workspace</title>
+  <meta name="description" content="Upload a PDF or image, jot a note, or save a link. Your calm home for research." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" />
 </head>
 <body>
-  <!-- Ambient background -->
-  <div class="bg-orbs" aria-hidden="true">
-    <span class="orb orb-1"></span>
-    <span class="orb orb-2"></span>
-    <span class="orb orb-3"></span>
-    <div class="grid-overlay"></div>
-  </div>
+  <!-- Top bar -->
+  <header class="topbar">
+    <a class="brand" href="#">
+      <span class="ic brand-ic" data-icon="book-open"></span>
+      <span class="brand-name">Research Workspace</span>
+    </a>
 
-  <!-- Announcement bar -->
-  <div class="announce">
-    <span class="announce-dot"></span>
-    New: AI auto-tagging is now in private beta — <a href="#pricing">join the waitlist →</a>
-  </div>
+    <div class="search">
+      <span class="ic search-ic" data-icon="search"></span>
+      <input type="search" id="searchInput" class="search-input" placeholder="Search…" autocomplete="off" />
+      <kbd class="kbd">⌘K</kbd>
+    </div>
 
-  <!-- Nav -->
-  <header class="nav" id="nav">
-    <div class="nav-inner">
-      <a class="brand" href="#top">
-        <span class="brand-mark">📥</span>
-        <span class="brand-name">Dump</span>
-      </a>
-      <nav class="nav-links" id="navLinks">
-        <a href="#features">Features</a>
-        <a href="#how">How it works</a>
-        <a href="#pricing">Pricing</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-      <div class="nav-actions">
-        <a href="#capture" class="text-btn">Sign in</a>
-        <a href="#capture" class="btn btn-primary btn-sm">Get started free</a>
-        <button id="themeToggle" class="ghost-btn" title="Toggle theme" aria-label="Toggle theme">🌗</button>
-        <button id="navToggle" class="ghost-btn nav-burger" aria-label="Open menu">☰</button>
-      </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary" id="addBtn">
+        <span class="ic" data-icon="plus"></span> Add
+      </button>
+      <button class="icon-btn" id="logoutBtn" title="Sign out" aria-label="Sign out">
+        <span class="ic" data-icon="log-out"></span>
+      </button>
     </div>
   </header>
 
-  <main id="top">
-    <!-- Hero -->
-    <section class="hero">
-      <div class="hero-content">
-        <span class="pill"><span class="pill-dot"></span> Your second brain for the internet</span>
-        <h1>Dump it here.<br /><span class="grad-text">We'll sort it out.</span></h1>
-        <p class="subtitle">
-          Drop links, Instagram reels, screenshots, PDFs and docs. Dump detects what
-          each thing is and files it into the right place — automatically.
+  <!-- App body -->
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="all">
+          <span class="ic" data-icon="book-open"></span>
+          <span class="nav-label">All items</span>
+          <span class="nav-count" data-count="all">0</span>
+        </button>
+        <button class="nav-item" data-view="docs">
+          <span class="ic" data-icon="file-text"></span>
+          <span class="nav-label">PDFs &amp; Docs</span>
+          <span class="nav-count" data-count="docs">0</span>
+        </button>
+        <button class="nav-item" data-view="notes">
+          <span class="ic" data-icon="notebook"></span>
+          <span class="nav-label">Notes</span>
+          <span class="nav-count" data-count="notes">0</span>
+        </button>
+        <button class="nav-item" data-view="links">
+          <span class="ic" data-icon="link"></span>
+          <span class="nav-label">Links</span>
+          <span class="nav-count" data-count="links">0</span>
+        </button>
+        <button class="nav-item" data-view="images">
+          <span class="ic" data-icon="image"></span>
+          <span class="nav-label">Images</span>
+          <span class="nav-count" data-count="images">0</span>
+        </button>
+        <button class="nav-item" data-view="starred">
+          <span class="ic" data-icon="star"></span>
+          <span class="nav-label">Starred</span>
+          <span class="nav-count" data-count="starred">0</span>
+        </button>
+      </nav>
+
+      <div class="shortcuts">
+        <p class="shortcuts-title">Shortcuts</p>
+        <p class="shortcuts-row"><kbd class="kbd sm">⌘K</kbd> search · <kbd class="kbd sm">N</kbd> new</p>
+        <p class="shortcuts-hint">Drop files anywhere to upload.</p>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="main-head">
+        <p class="item-count" id="countLabel">0 items</p>
+        <div class="sort">
+          <span class="ic sort-ic" data-icon="arrow-up-down"></span>
+          <div class="select-wrap">
+            <select id="sortSelect" class="select">
+              <option value="new">Newest first</option>
+              <option value="old">Oldest first</option>
+              <option value="az">Title A–Z</option>
+            </select>
+            <span class="ic select-chevron" data-icon="chevron-down"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item grid -->
+      <div class="grid" id="grid"></div>
+
+      <!-- Empty state -->
+      <div class="empty-card" id="emptyState">
+        <div class="empty-circle"><span class="ic" data-icon="book-open"></span></div>
+        <h2 class="empty-title" id="emptyTitle">Your workspace is empty</h2>
+        <p class="empty-text" id="emptyText">
+          Upload a <span class="link-accent">PDF</span> or image, jot a note, or save a link.
+          You can also drop files anywhere on this page.
         </p>
-        <div class="hero-cta">
-          <a href="#capture" class="btn btn-primary btn-lg">Start dumping — it's free</a>
-          <a href="#how" class="btn btn-secondary btn-lg">See how it works</a>
-        </div>
-
-        <!-- Social proof -->
-        <div class="social-proof">
-          <div class="avatars">
-            <span class="avatar av-1">AK</span>
-            <span class="avatar av-2">MJ</span>
-            <span class="avatar av-3">RS</span>
-            <span class="avatar av-4">TL</span>
-            <span class="avatar av-5">+</span>
-          </div>
-          <div class="proof-text">
-            <div class="stars">★★★★★</div>
-            <span>Loved by <strong>2,000+</strong> curious builders</span>
-          </div>
-        </div>
+        <button class="btn btn-primary" id="addFirstBtn">
+          <span class="ic" data-icon="plus"></span> Add first item
+        </button>
       </div>
-    </section>
+    </main>
+  </div>
 
-    <!-- Live product / capture -->
-    <section class="app-shell" id="capture">
-      <div class="window">
-        <div class="window-bar">
-          <span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span>
-          <span class="window-url">app.dump.so</span>
-          <span class="window-live">● live demo — try it</span>
-        </div>
-        <div class="window-body">
-          <!-- Drop / paste zone -->
-          <div class="dropzone" id="dropzone" tabindex="0">
-            <div class="dropzone-inner">
-              <div class="dropzone-icon">⬇️</div>
-              <p class="dropzone-title">Drag &amp; drop files here</p>
-              <p class="dropzone-hint">images · screenshots · PDFs · docs</p>
-              <label class="file-pick">
-                <input type="file" id="fileInput" multiple hidden
-                       accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
-                <span class="btn btn-secondary">Or browse files</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="paste-row">
-            <input type="text" id="linkInput" class="link-input"
-                   placeholder="Paste a link or note and press Enter — reels, YouTube, docs, PDFs, anything…"
-                   autocomplete="off" />
-            <button class="btn btn-primary" id="addLinkBtn">Add</button>
-          </div>
-          <p class="paste-tip">Tip: paste several links at once (one per line) and we'll file each of them.</p>
-
-          <!-- Library -->
-          <div class="library" id="library">
-            <div class="library-head">
-              <div>
-                <h2>Your library</h2>
-                <p class="muted" id="countLabel">Nothing saved yet</p>
-              </div>
-              <div class="search-wrap">
-                <input type="search" id="searchInput" class="search-input" placeholder="Search your dump…" />
-              </div>
-            </div>
-
-            <div class="tabs" id="tabs">
-              <button class="tab active" data-cat="all">All <span class="tab-count" data-count="all">0</span></button>
-              <button class="tab" data-cat="reel">🎬 Reels <span class="tab-count" data-count="reel">0</span></button>
-              <button class="tab" data-cat="video">▶️ Videos <span class="tab-count" data-count="video">0</span></button>
-              <button class="tab" data-cat="doc">📄 Docs <span class="tab-count" data-count="doc">0</span></button>
-              <button class="tab" data-cat="photo">🖼️ Photos <span class="tab-count" data-count="photo">0</span></button>
-              <button class="tab" data-cat="link">🔗 Links <span class="tab-count" data-count="link">0</span></button>
-            </div>
-
-            <div class="grid" id="grid"></div>
-
-            <div class="empty" id="emptyState">
-              <div class="empty-emoji">🗂️</div>
-              <h3>Nothing here yet</h3>
-              <p>Drop a file or paste a link above to start building your vault.</p>
-            </div>
-          </div>
-        </div>
+  <!-- Add modal -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h3 id="modalTitle">Add to your workspace</h3>
+        <button class="icon-btn" id="modalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
       </div>
-    </section>
-
-    <!-- Logo cloud -->
-    <section class="logos">
-      <p class="logos-label">Trusted by curious minds at</p>
-      <div class="logo-row">
-        <span class="logo-word">Acme</span>
-        <span class="logo-word">Novaflow</span>
-        <span class="logo-word">Loop</span>
-        <span class="logo-word">Vertex</span>
-        <span class="logo-word">Quanta</span>
-        <span class="logo-word">Orbit</span>
+      <p class="modal-sub">Paste a link or note, or upload a file. We'll figure out where it goes.</p>
+      <div class="modal-field">
+        <input type="text" id="linkInput" class="modal-input"
+               placeholder="Paste a link or type a note, then press Enter…" autocomplete="off" />
       </div>
-    </section>
-
-    <!-- Features bento -->
-    <section class="section" id="features">
-      <div class="section-head">
-        <span class="eyebrow">Features</span>
-        <h2>Everything you save, finally in order</h2>
-        <p class="section-sub">Stop scattering ideas across 12 apps. Dump is one home for every link, clip, and file — organized the moment it lands.</p>
-      </div>
-
-      <div class="bento">
-        <article class="bento-card span-2">
-          <div class="bento-icon">🧠</div>
-          <h3>Smart auto-detection</h3>
-          <p>Paste anything and Dump instantly knows whether it's a reel, a YouTube video, a PDF, a Google Doc, or a screenshot — then files it for you.</p>
-          <div class="chip-row">
-            <span class="chip">🎬 Reels</span><span class="chip">▶️ Videos</span><span class="chip">📄 Docs</span><span class="chip">🖼️ Photos</span><span class="chip">🔗 Links</span>
-          </div>
-        </article>
-        <article class="bento-card">
-          <div class="bento-icon">🔍</div>
-          <h3>Instant search</h3>
-          <p>Find anything in a keystroke across every category you've ever saved.</p>
-        </article>
-        <article class="bento-card">
-          <div class="bento-icon">🔒</div>
-          <h3>Private by default</h3>
-          <p>Your dump lives in your browser. No account required to start, ever.</p>
-        </article>
-        <article class="bento-card">
-          <div class="bento-icon">🪄</div>
-          <h3>Drag, drop, done</h3>
-          <p>Drop files anywhere on the page. Paste ten links at once — we file each one.</p>
-        </article>
-        <article class="bento-card span-2">
-          <div class="bento-icon">🌐</div>
-          <h3>Works with everything you already use</h3>
-          <p>Instagram, TikTok, YouTube, Vimeo, Google Docs & Drive, PDFs, Office files and plain notes — all recognized out of the box.</p>
-          <div class="chip-row">
-            <span class="chip">Instagram</span><span class="chip">TikTok</span><span class="chip">YouTube</span><span class="chip">Google Docs</span><span class="chip">PDF</span>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <!-- How it works -->
-    <section class="section" id="how">
-      <div class="section-head">
-        <span class="eyebrow">How it works</span>
-        <h2>Three steps. Zero organizing.</h2>
-        <p class="section-sub">You dump. We do the boring part.</p>
-      </div>
-      <div class="steps">
-        <div class="step">
-          <span class="step-num">1</span>
-          <h3>Dump it</h3>
-          <p>Drop a file or paste a link — a reel, an article, a PDF, a screenshot. Anything you don't want to lose.</p>
-        </div>
-        <div class="step-arrow">→</div>
-        <div class="step">
-          <span class="step-num">2</span>
-          <h3>We detect it</h3>
-          <p>Dump reads the link or file and figures out exactly what it is in an instant.</p>
-        </div>
-        <div class="step-arrow">→</div>
-        <div class="step">
-          <span class="step-num">3</span>
-          <h3>Find it later</h3>
-          <p>It's sorted into the right shelf and searchable forever. Come back whenever.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Testimonials -->
-    <section class="section" id="testimonials">
-      <div class="section-head">
-        <span class="eyebrow">Loved by builders</span>
-        <h2>People stopped losing their best ideas</h2>
-      </div>
-      <div class="quotes">
-        <figure class="quote">
-          <p>"I used to bury reels in DMs and links in 30 browser tabs. Now everything I find just goes to Dump and sorts itself. Life-changing for how I research."</p>
-          <figcaption><span class="avatar av-1">AK</span><span><strong>Aisha K.</strong><br />Product Designer</span></figcaption>
-        </figure>
-        <figure class="quote">
-          <p>"The auto-detection is spooky-good. I paste a YouTube link and a PDF back to back and they land in exactly the right place. No folders, no thinking."</p>
-          <figcaption><span class="avatar av-2">MJ</span><span><strong>Marco J.</strong><br />Indie Founder</span></figcaption>
-        </figure>
-        <figure class="quote">
-          <p>"Finally a place for all the screenshots and inspo I hoard. Search actually finds things. It's the second brain I kept trying to build myself."</p>
-          <figcaption><span class="avatar av-3">RS</span><span><strong>Riya S.</strong><br />Content Creator</span></figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <!-- Pricing -->
-    <section class="section" id="pricing">
-      <div class="section-head">
-        <span class="eyebrow">Pricing</span>
-        <h2>Start free. Upgrade when it clicks.</h2>
-        <p class="section-sub">No credit card to begin. Cancel anytime.</p>
-      </div>
-      <div class="plans">
-        <div class="plan">
-          <h3 class="plan-name">Free</h3>
-          <div class="plan-price">$0<span>/forever</span></div>
-          <p class="plan-desc">For getting your chaos under control.</p>
-          <ul class="plan-feats">
-            <li>Up to 100 saved items</li>
-            <li>All auto-detection categories</li>
-            <li>Drag, drop & paste</li>
-            <li>Private browser storage</li>
-          </ul>
-          <a href="#capture" class="btn btn-secondary btn-block">Get started</a>
-        </div>
-        <div class="plan plan-featured">
-          <span class="plan-badge">Most popular</span>
-          <h3 class="plan-name">Pro</h3>
-          <div class="plan-price">$8<span>/month</span></div>
-          <p class="plan-desc">For power dumpers who never want to lose a thing.</p>
-          <ul class="plan-feats">
-            <li>Unlimited items</li>
-            <li>Cloud sync across devices</li>
-            <li>AI auto-tags & summaries</li>
-            <li>Advanced search & filters</li>
-          </ul>
-          <a href="#capture" class="btn btn-primary btn-block">Start Pro trial</a>
-        </div>
-        <div class="plan">
-          <h3 class="plan-name">Team</h3>
-          <div class="plan-price">$24<span>/month</span></div>
-          <p class="plan-desc">For teams sharing research and inspiration.</p>
-          <ul class="plan-feats">
-            <li>Everything in Pro</li>
-            <li>Shared team spaces</li>
-            <li>Collaborative collections</li>
-            <li>Priority support</li>
-          </ul>
-          <a href="#capture" class="btn btn-secondary btn-block">Talk to us</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- FAQ -->
-    <section class="section faq" id="faq">
-      <div class="section-head">
-        <span class="eyebrow">FAQ</span>
-        <h2>Questions, answered</h2>
-      </div>
-      <div class="faq-list">
-        <details class="faq-item">
-          <summary>Is my data private?</summary>
-          <p>Yes. On the free plan everything is stored locally in your own browser — nothing is uploaded. Cloud sync on paid plans is encrypted and only visible to you.</p>
-        </details>
-        <details class="faq-item">
-          <summary>What kinds of links can it detect?</summary>
-          <p>Instagram reels & posts, TikTok, YouTube (including Shorts), Vimeo, PDFs, Google Docs/Sheets/Slides, Drive files, Office documents, image links, and plain-text notes. Anything else lands in a general Links shelf.</p>
-        </details>
-        <details class="faq-item">
-          <summary>Do I need an account to try it?</summary>
-          <p>Nope. Scroll up, drop a file or paste a link, and it works immediately. Create an account later only if you want sync across devices.</p>
-        </details>
-        <details class="faq-item">
-          <summary>Can I save Instagram reels and videos?</summary>
-          <p>Absolutely — that's a core use case. Paste a reel link and Dump files it under Reels with a one-tap "Open" back to the original.</p>
-        </details>
-        <details class="faq-item">
-          <summary>Will it work on my phone?</summary>
-          <p>Yes. Dump is fully responsive and works in any modern mobile browser.</p>
-        </details>
-      </div>
-    </section>
-
-    <!-- Final CTA -->
-    <section class="cta-band">
-      <div class="cta-inner">
-        <h2>Your next great idea deserves a home.</h2>
-        <p>Stop losing links, reels and files in the void. Start your second brain in seconds — free.</p>
-        <a href="#capture" class="btn btn-primary btn-lg">Start dumping now</a>
-      </div>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="footer-inner">
-      <div class="footer-brand">
-        <a class="brand" href="#top"><span class="brand-mark">📥</span><span class="brand-name">Dump</span></a>
-        <p>Your second brain for the internet. Drop it here — we'll sort it out.</p>
-      </div>
-      <div class="footer-cols">
-        <div class="footer-col">
-          <h4>Product</h4>
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-          <a href="#pricing">Pricing</a>
-          <a href="#capture">Try it live</a>
-        </div>
-        <div class="footer-col">
-          <h4>Company</h4>
-          <a href="#">About</a>
-          <a href="#">Blog</a>
-          <a href="#">Careers</a>
-          <a href="#">Contact</a>
-        </div>
-        <div class="footer-col">
-          <h4>Legal</h4>
-          <a href="#">Privacy</a>
-          <a href="#">Terms</a>
-          <a href="#">Security</a>
-        </div>
+      <label class="modal-drop" id="modalDrop">
+        <input type="file" id="fileInput" multiple hidden
+               accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+        <span class="ic" data-icon="upload"></span>
+        <span>Click to browse files, or drop them anywhere</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+        <button class="btn btn-primary" id="addLinkBtn">Add to workspace</button>
       </div>
     </div>
-    <div class="footer-bottom">
-      <p>© 2026 Dump. Everything you save stays private, in your browser.</p>
-      <div class="footer-social">
-        <a href="#" aria-label="X">𝕏</a>
-        <a href="#" aria-label="Instagram">📷</a>
-        <a href="#" aria-label="GitHub">⌨</a>
-      </div>
+  </div>
+
+  <!-- Full-page drop overlay -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-overlay-inner">
+      <span class="ic" data-icon="upload"></span>
+      <p>Drop to add to your workspace</p>
     </div>
-  </footer>
+  </div>
 
   <!-- Toast -->
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

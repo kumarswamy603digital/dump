@@ -1,5 +1,5 @@
 /* ============================================================
-   Dump — personal resource vault
+   Research Workspace — calm research vault
    Vanilla JS · IndexedDB · zero dependencies
    ============================================================ */
 
@@ -18,7 +18,6 @@ const CATEGORIES = {
 
 function safeUrl(str) {
   try {
-    // add protocol if it looks like a bare domain
     const withProto = /^https?:\/\//i.test(str) ? str : "https://" + str;
     return new URL(withProto);
   } catch {
@@ -34,7 +33,7 @@ function looksLikeUrl(str) {
 
 /**
  * Detect the type of a pasted string.
- * Returns { category, url, title, domain, thumbnail }
+ * Returns { category, url, title, domain, thumbnail, subtitle }
  */
 function detectLink(raw) {
   const text = raw.trim();
@@ -207,24 +206,77 @@ async function dbDelete(id) {
   });
 }
 
-/* ---------------- 3. App state & DOM refs ---------------- */
+/* ---------------- 3. Icons (Lucide-style, inline SVG) ---------------- */
 
-let items = [];          // in-memory cache of all items
-let activeCat = "all";
+const SVG = (paths) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+
+const ICONS = {
+  "book-open": SVG('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'),
+  "file-text": SVG('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>'),
+  notebook: SVG('<path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M16 2v20"/>'),
+  link: SVG('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+  image: SVG('<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>'),
+  star: SVG('<path d="M11.5 2.5a.56.56 0 0 1 1 0l2.3 4.66c.08.17.24.29.43.31l5.15.75a.56.56 0 0 1 .31.96l-3.73 3.63a.56.56 0 0 0-.16.5l.88 5.12a.56.56 0 0 1-.81.59l-4.6-2.42a.56.56 0 0 0-.52 0l-4.6 2.42a.56.56 0 0 1-.81-.59l.88-5.12a.56.56 0 0 0-.16-.5L3.01 10.19a.56.56 0 0 1 .31-.96l5.15-.75a.56.56 0 0 0 .43-.31z"/>'),
+  video: SVG('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>'),
+  search: SVG('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+  plus: SVG('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+  "log-out": SVG('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>'),
+  "arrow-up-down": SVG('<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>'),
+  "chevron-down": SVG('<path d="m6 9 6 6 6-6"/>'),
+  trash: SVG('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>'),
+  external: SVG('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
+  x: SVG('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  upload: SVG('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>'),
+};
+
+const TYPE_META = {
+  reel:  { label: "Reel",  icon: "video" },
+  video: { label: "Video", icon: "video" },
+  doc:   { label: "Doc",   icon: "file-text" },
+  photo: { label: "Image", icon: "image" },
+  link:  { label: "Link",  icon: "link" },
+  note:  { label: "Note",  icon: "notebook" },
+};
+
+/** Which sidebar bucket a detected category belongs to. */
+function bucketOf(cat) {
+  if (cat === "doc") return "docs";
+  if (cat === "note") return "notes";
+  if (cat === "photo") return "images";
+  return "links"; // link, reel, video
+}
+
+function injectIcons(root = document) {
+  root.querySelectorAll("[data-icon]").forEach((el) => {
+    const name = el.getAttribute("data-icon");
+    if (ICONS[name]) el.innerHTML = ICONS[name];
+  });
+}
+
+/* ---------------- 4. State & DOM refs ---------------- */
+
+let items = [];
+let activeView = "all";        // all | docs | notes | links | images | starred
 let searchTerm = "";
+let sortOrder = "new";         // new | old | az
 
 const $ = (sel) => document.querySelector(sel);
 const grid = $("#grid");
 const emptyState = $("#emptyState");
-const tabsEl = $("#tabs");
+const emptyTitle = $("#emptyTitle");
+const emptyText = $("#emptyText");
 const countLabel = $("#countLabel");
-const dropzone = $("#dropzone");
 const fileInput = $("#fileInput");
 const linkInput = $("#linkInput");
 const searchInput = $("#searchInput");
+const sortSelect = $("#sortSelect");
 const toastEl = $("#toast");
+const nav = $("#nav");
+const modalOverlay = $("#modalOverlay");
+const dropOverlay = $("#dropOverlay");
 
-/* ---------------- 4. Adding items ---------------- */
+/* ---------------- 5. Adding / mutating items ---------------- */
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -234,11 +286,12 @@ async function addFromText(raw) {
   const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (parts.length === 0) return;
   let added = 0;
+  let lastCat = null;
   for (const part of parts) {
     const info = detectLink(part);
     const item = {
       id: uid(),
-      createdAt: Date.now(),
+      createdAt: Date.now() + added,
       kind: info.url ? "link" : "note",
       category: info.category,
       title: info.title,
@@ -246,13 +299,15 @@ async function addFromText(raw) {
       url: info.url,
       thumbnail: info.thumbnail || null,
       note: info.category === "note" ? info.title : null,
+      starred: false,
     };
     await dbPut(item);
     items.unshift(item);
+    lastCat = info.category;
     added++;
   }
   render();
-  toast(added > 1 ? `Added ${added} items` : `Filed under ${CATEGORIES[items[0].category].label}`);
+  toast(added > 1 ? `Added ${added} items` : `Saved to ${capitalize(bucketOf(lastCat))}`);
 }
 
 async function addFiles(fileList) {
@@ -268,15 +323,32 @@ async function addFiles(fileList) {
       title: info.title,
       subtitle: humanSize(file.size),
       url: null,
-      blob: file,                       // stored directly in IndexedDB
+      blob: file,
       mime: file.type,
       thumbnail: null,
+      starred: false,
     };
     await dbPut(item);
     items.unshift(item);
   }
   render();
-  toast(files.length > 1 ? `Added ${files.length} files` : "File filed away");
+  toast(files.length > 1 ? `Uploaded ${files.length} files` : "File uploaded");
+}
+
+async function removeItem(id) {
+  await dbDelete(id);
+  if (objectUrls.has(id)) { URL.revokeObjectURL(objectUrls.get(id)); objectUrls.delete(id); }
+  items = items.filter((it) => it.id !== id);
+  render();
+  toast("Removed");
+}
+
+async function toggleStar(id) {
+  const it = items.find((x) => x.id === id);
+  if (!it) return;
+  it.starred = !it.starred;
+  await dbPut(it);
+  render();
 }
 
 function humanSize(bytes) {
@@ -286,15 +358,9 @@ function humanSize(bytes) {
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
   return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
+function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
-async function removeItem(id) {
-  await dbDelete(id);
-  items = items.filter((it) => it.id !== id);
-  render();
-  toast("Removed");
-}
-
-/* ---------------- 5. Rendering ---------------- */
+/* ---------------- 6. Rendering ---------------- */
 
 const objectUrls = new Map();
 function urlForBlob(item) {
@@ -304,117 +370,121 @@ function urlForBlob(item) {
   return url;
 }
 
-function gradientClass(cat) {
-  return { reel: "gradient-1", video: "gradient-2", doc: "gradient-3", photo: "gradient-4", link: "gradient-2", note: "gradient-3" }[cat] || "gradient-2";
+function viewItems() {
+  let list = items.slice();
+  if (activeView === "starred") list = list.filter((i) => i.starred);
+  else if (activeView !== "all") list = list.filter((i) => bucketOf(i.category) === activeView);
+
+  if (searchTerm) {
+    list = list.filter((it) => {
+      const hay = `${it.title} ${it.subtitle} ${it.url || ""} ${it.note || ""}`.toLowerCase();
+      return hay.includes(searchTerm);
+    });
+  }
+
+  list.sort((a, b) => {
+    if (sortOrder === "az") return String(a.title).localeCompare(String(b.title));
+    return sortOrder === "old" ? a.createdAt - b.createdAt : b.createdAt - a.createdAt;
+  });
+  return list;
 }
 
-function mediaFor(item) {
-  // Photos (files or image links) -> preview
+function thumbFor(item) {
+  const meta = TYPE_META[item.category] || TYPE_META.link;
+  const tint = `thumb-tint-${bucketOf(item.category)}`;
+
+  // Image previews (uploaded file or direct image link)
   if (item.category === "photo") {
     const src = item.kind === "file" ? urlForBlob(item) : (item.thumbnail || item.url);
-    if (src) return `<img loading="lazy" src="${escapeAttr(src)}" alt="${escapeAttr(item.title)}" />`;
+    if (src) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
   }
-  // Video/reel with a thumbnail (e.g. YouTube)
+  // Thumbnails (e.g. YouTube)
   if (item.thumbnail) {
-    return `<img loading="lazy" src="${escapeAttr(item.thumbnail)}" alt="${escapeAttr(item.title)}"
-              onerror="this.parentNode.classList.add('${gradientClass(item.category)}');this.replaceWith(bigIcon('${item.category}'))" />`;
+    return `<div class="item-thumb">${starBtn(item)}
+      <img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}"
+           onerror="this.remove()" /></div>`;
   }
-  const emoji = CATEGORIES[item.category]?.emoji || "🔗";
-  return `<span class="big-icon">${emoji}</span>`;
+  // Tinted icon tile
+  return `<div class="item-thumb ${tint}">${starBtn(item)}
+    <span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span>
+    <span class="thumb-ic ic">${ICONS[meta.icon]}</span></div>`;
 }
 
-// used by onerror fallback above
-window.bigIcon = function (cat) {
-  const span = document.createElement("span");
-  span.className = "big-icon";
-  span.textContent = CATEGORIES[cat]?.emoji || "🔗";
-  return span;
-};
+function starBtn(item) {
+  return `<button class="star-btn ${item.starred ? "starred" : ""}" data-star="${item.id}"
+            title="${item.starred ? "Unstar" : "Star"}" aria-label="Star">${ICONS.star}</button>`;
+}
 
 function cardHtml(item) {
-  const cat = CATEGORIES[item.category] || CATEGORIES.link;
-
+  // Note card
   if (item.category === "note") {
-    return `
-      <article class="card" data-id="${item.id}">
-        <div class="card-body">
-          <span class="type-badge" style="position:static;align-self:flex-start;background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">${cat.emoji} Note</span>
-          <p class="card-note">${escapeHtml(item.note || item.title)}</p>
-          <div class="card-actions">
-            <button class="card-del" title="Delete" data-del="${item.id}">🗑</button>
-          </div>
-        </div>
-      </article>`;
-  }
-
-  const openBtn = item.kind === "file"
-    ? `<a class="card-link" href="${escapeAttr(urlForBlob(item))}" target="_blank" rel="noopener" download="${escapeAttr(item.title)}">Open</a>`
-    : item.url
-      ? `<a class="card-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">Open</a>`
-      : "";
-
-  return `
-    <article class="card" data-id="${item.id}">
-      <div class="card-media ${gradientClass(item.category)}">
-        <span class="type-badge">${cat.emoji} ${cat.label}</span>
-        ${mediaFor(item)}
-      </div>
-      <div class="card-body">
-        <h3 class="card-title">${escapeHtml(item.title)}</h3>
-        <p class="card-sub">${escapeHtml(item.subtitle || item.url || "")}</p>
-        <div class="card-actions">
-          ${openBtn}
-          <button class="card-del" title="Delete" data-del="${item.id}">🗑</button>
-        </div>
+    return `<article class="item-card" data-id="${item.id}">
+      ${starBtn(item)}
+      <div class="item-note">${esc(item.note || item.title)}</div>
+      <div class="item-actions">
+        <button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button>
       </div>
     </article>`;
-}
+  }
 
-function filteredItems() {
-  return items.filter((it) => {
-    if (activeCat !== "all" && it.category !== activeCat) return false;
-    if (searchTerm) {
-      const hay = `${it.title} ${it.subtitle} ${it.url || ""} ${it.note || ""}`.toLowerCase();
-      if (!hay.includes(searchTerm)) return false;
-    }
-    return true;
-  });
+  const open = item.kind === "file"
+    ? `<a class="item-open" href="${esc(urlForBlob(item))}" target="_blank" rel="noopener" download="${esc(item.title)}">${ICONS.external} Open</a>`
+    : item.url
+      ? `<a class="item-open" href="${esc(item.url)}" target="_blank" rel="noopener">${ICONS.external} Open</a>`
+      : "";
+
+  return `<article class="item-card" data-id="${item.id}">
+    ${thumbFor(item)}
+    <div class="item-info">
+      <h3 class="item-title">${esc(item.title)}</h3>
+      <p class="item-sub">${esc(item.subtitle || item.url || "")}</p>
+    </div>
+    <div class="item-actions">
+      ${open}
+      <button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button>
+    </div>
+  </article>`;
 }
 
 function render() {
-  // counts
-  const counts = { all: items.length, reel: 0, video: 0, doc: 0, photo: 0, link: 0, note: 0 };
-  items.forEach((it) => { counts[it.category] = (counts[it.category] || 0) + 1; });
-  document.querySelectorAll(".tab-count").forEach((el) => {
-    el.textContent = counts[el.dataset.count] || 0;
+  // Sidebar counts
+  const counts = { all: items.length, docs: 0, notes: 0, links: 0, images: 0, starred: 0 };
+  items.forEach((it) => {
+    counts[bucketOf(it.category)]++;
+    if (it.starred) counts.starred++;
+  });
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    el.textContent = counts[el.dataset.count] ?? 0;
   });
 
-  countLabel.textContent = items.length
-    ? `${items.length} item${items.length > 1 ? "s" : ""} saved`
-    : "Nothing saved yet";
+  const list = viewItems();
+  countLabel.textContent = `${list.length} item${list.length === 1 ? "" : "s"}`;
 
-  const list = filteredItems();
   grid.innerHTML = list.map(cardHtml).join("");
 
-  if (items.length === 0) {
-    emptyState.classList.add("show");
-    emptyState.querySelector("h3").textContent = "Nothing here yet";
-    emptyState.querySelector("p").textContent = "Drop a file or paste a link above to start building your vault.";
-  } else if (list.length === 0) {
-    emptyState.classList.add("show");
-    emptyState.querySelector("h3").textContent = "No matches";
-    emptyState.querySelector("p").textContent = "Nothing in this view. Try another category or search.";
+  // Empty state
+  if (list.length === 0) {
+    emptyState.style.display = "flex";
+    if (items.length === 0) {
+      emptyTitle.textContent = "Your workspace is empty";
+      emptyText.innerHTML = 'Upload a <span class="link-accent">PDF</span> or image, jot a note, or save a link. You can also drop files anywhere on this page.';
+    } else if (searchTerm) {
+      emptyTitle.textContent = "No matches found";
+      emptyText.textContent = "Try a different search, or clear it to see everything.";
+    } else {
+      emptyTitle.textContent = "Nothing here yet";
+      emptyText.textContent = "This shelf is empty. Add something and it'll show up here.";
+    }
   } else {
-    emptyState.classList.remove("show");
+    emptyState.style.display = "none";
   }
 }
 
-/* ---------------- 6. Helpers ---------------- */
+/* ---------------- 7. Helpers ---------------- */
 
-function escapeHtml(str = "") {
+function esc(str = "") {
   return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-function escapeAttr(str = "") { return escapeHtml(str); }
 
 let toastTimer;
 function toast(msg) {
@@ -424,76 +494,101 @@ function toast(msg) {
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
 }
 
-/* ---------------- 7. Event wiring ---------------- */
+/* ---------------- 8. Modal ---------------- */
 
-// Paste / add link
-$("#addLinkBtn").addEventListener("click", () => {
-  if (linkInput.value.trim()) { addFromText(linkInput.value); linkInput.value = ""; }
+function openModal() {
+  modalOverlay.hidden = false;
+  setTimeout(() => linkInput.focus(), 40);
+}
+function closeModal() {
+  modalOverlay.hidden = true;
+  linkInput.value = "";
+}
+
+/* ---------------- 9. Event wiring ---------------- */
+
+// Add buttons open the modal
+$("#addBtn").addEventListener("click", openModal);
+$("#addFirstBtn").addEventListener("click", openModal);
+$("#modalClose").addEventListener("click", closeModal);
+$("#modalCancel").addEventListener("click", closeModal);
+modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
+
+// Submit link/note from modal
+function submitLink() {
+  if (linkInput.value.trim()) { addFromText(linkInput.value); closeModal(); }
+}
+$("#addLinkBtn").addEventListener("click", submitLink);
+linkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitLink(); });
+
+// File picker (inside modal)
+fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; closeModal(); });
+
+// Grid actions (delegation): open handled by anchor, delete + star here
+grid.addEventListener("click", (e) => {
+  const del = e.target.closest("[data-del]");
+  if (del) { removeItem(del.getAttribute("data-del")); return; }
+  const star = e.target.closest("[data-star]");
+  if (star) { toggleStar(star.getAttribute("data-star")); }
 });
-linkInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && linkInput.value.trim()) { addFromText(linkInput.value); linkInput.value = ""; }
+
+// Sidebar navigation
+nav.addEventListener("click", (e) => {
+  const item = e.target.closest(".nav-item");
+  if (!item) return;
+  nav.querySelectorAll(".nav-item").forEach((n) => n.classList.remove("active"));
+  item.classList.add("active");
+  activeView = item.dataset.view;
+  render();
 });
 
-// File picker
-fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
+// Sort
+sortSelect.addEventListener("change", () => { sortOrder = sortSelect.value; render(); });
 
-// Dropzone click -> open picker
-dropzone.addEventListener("click", (e) => { if (!e.target.closest(".file-pick")) fileInput.click(); });
-dropzone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
+// Search
+searchInput.addEventListener("input", () => { searchTerm = searchInput.value.trim().toLowerCase(); render(); });
 
-// Drag & drop (whole window highlights the zone)
-["dragenter", "dragover"].forEach((ev) =>
-  window.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); })
-);
-["dragleave", "drop"].forEach((ev) =>
-  window.addEventListener(ev, (e) => {
-    e.preventDefault();
-    if (ev === "dragleave" && e.relatedTarget) return;
-    dropzone.classList.remove("dragover");
-  })
-);
+// Sign out (no auth yet)
+$("#logoutBtn").addEventListener("click", () => toast("You're all set — nothing to sign out of yet"));
+
+// Keyboard shortcuts: Cmd/Ctrl+K = search, N = new, Esc = close modal
+document.addEventListener("keydown", (e) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault(); searchInput.focus(); searchInput.select();
+  } else if (e.key === "Escape") {
+    if (!modalOverlay.hidden) closeModal();
+  } else if (e.key.toLowerCase() === "n" && !typing && modalOverlay.hidden) {
+    e.preventDefault(); openModal();
+  }
+});
+
+// Global drag & drop (drop files anywhere on the page)
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => {
+  if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) {
+    e.preventDefault(); dragDepth++; dropOverlay.classList.add("show");
+  }
+});
+window.addEventListener("dragover", (e) => { if (dropOverlay.classList.contains("show")) e.preventDefault(); });
+window.addEventListener("dragleave", (e) => {
+  if (dropOverlay.classList.contains("show")) { dragDepth--; if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove("show"); } }
+});
 window.addEventListener("drop", (e) => {
   e.preventDefault();
+  dragDepth = 0; dropOverlay.classList.remove("show");
   const dt = e.dataTransfer;
+  if (!dt) return;
   if (dt.files && dt.files.length) { addFiles(dt.files); return; }
   const text = dt.getData("text/uri-list") || dt.getData("text/plain");
   if (text) addFromText(text);
 });
 
-// Grid actions (event delegation)
-grid.addEventListener("click", (e) => {
-  const del = e.target.closest("[data-del]");
-  if (del) { removeItem(del.getAttribute("data-del")); }
-});
-
-// Tabs
-tabsEl.addEventListener("click", (e) => {
-  const tab = e.target.closest(".tab");
-  if (!tab) return;
-  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-  tab.classList.add("active");
-  activeCat = tab.dataset.cat;
-  render();
-});
-
-// Search
-searchInput.addEventListener("input", () => { searchTerm = searchInput.value.trim().toLowerCase(); render(); });
-
-// Theme toggle
-const themeToggle = $("#themeToggle");
-function applyTheme(t) {
-  document.documentElement.setAttribute("data-theme", t);
-  try { localStorage.setItem("dump-theme", t); } catch {}
-}
-themeToggle.addEventListener("click", () => {
-  const cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-  applyTheme(cur === "light" ? "dark" : "light");
-});
-
-/* ---------------- 8. Boot ---------------- */
+/* ---------------- 10. Boot ---------------- */
 
 (async function init() {
-  try { applyTheme(localStorage.getItem("dump-theme") || "dark"); } catch { applyTheme("dark"); }
+  injectIcons();
+  if (sortSelect) sortSelect.value = sortOrder;
   try {
     items = (await dbAll()).sort((a, b) => b.createdAt - a.createdAt);
   } catch (err) {
@@ -502,24 +597,3 @@ themeToggle.addEventListener("click", () => {
   }
   render();
 })();
-
-
-/* ---------------- 9. Marketing site chrome ---------------- */
-
-// Sticky nav shadow on scroll
-const navEl = document.getElementById("nav");
-if (navEl) {
-  const onScroll = () => navEl.classList.toggle("scrolled", window.scrollY > 10);
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
-}
-
-// Mobile nav toggle
-const navToggle = document.getElementById("navToggle");
-const navLinks = document.getElementById("navLinks");
-if (navToggle && navLinks) {
-  navToggle.addEventListener("click", () => navLinks.classList.toggle("open"));
-  navLinks.querySelectorAll("a").forEach((a) =>
-    a.addEventListener("click", () => navLinks.classList.remove("open"))
-  );
-}
