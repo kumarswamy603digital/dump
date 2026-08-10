@@ -554,7 +554,7 @@ async function handleApi(req, res, url) {
     // Server-side AI classification + cover-image (first frame) fetch — in parallel.
     let section = b.section || null;
     let thumbnail = b.thumbnail || null;
-    if (!isImage && !fileBuf && (b.url || b.note || b.title)) {
+    if (b.analyze !== false && !isImage && !fileBuf && (b.url || b.note || b.title)) {
       const needCover = b.url && !thumbnail && ["reel", "video", "link"].includes(b.category);
       const [c, og] = await Promise.all([
         classifyText({ url: b.url, title: b.title, note: b.note }),
@@ -574,9 +574,9 @@ async function handleApi(req, res, url) {
     );
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
 
-    // OCR screenshots: extract any links found inside the image.
+    // OCR screenshots: extract any links found inside the image (skipped for direct adds).
     let ocrUrls = [];
-    if (isImage && fileBuf) {
+    if (b.analyze !== false && isImage && fileBuf) {
       try { ocrUrls = extractUrls(await ocrImageBuffer(fileBuf, mime)); } catch {}
     }
     return send(res, 201, { item: rowToItem(row), ocrUrls });

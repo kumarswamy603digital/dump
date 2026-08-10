@@ -73,6 +73,9 @@ body {
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
 .btn-ghost:hover { background: var(--panel-soft); }
+.btn-secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); }
+.btn-secondary:hover { background: var(--panel-soft); border-color: var(--terra); }
+.btn-secondary .ic { color: var(--terra); }
 
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;

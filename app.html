@@ -26,6 +26,9 @@
     </div>
 
     <div class="topbar-actions">
+      <button class="btn btn-primary btn-sm" id="addBtn" title="Add directly to your library">
+        <span class="ic" data-icon="plus"></span> <span class="add-label">Add</span>
+      </button>
       <button class="btn btn-secondary btn-sm" id="vaultBtn" title="Your pinned items & sections">
         <span class="ic" data-icon="lock"></span> <span class="vault-label">User Vault</span>
       </button>
@@ -144,6 +147,28 @@
     </main>
   </div>
 
+  <!-- Add modal (direct add — no AI) -->
+  <div class="modal-overlay" id="addModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
+      <div class="modal-head">
+        <h3 id="addModalTitle">Add to your library</h3>
+        <button class="icon-btn" id="addModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub">Add a link, note, or file straight to your library — no AI analysis, it's saved directly.</p>
+      <input type="text" id="addLinkInput" class="modal-input" placeholder="Paste a link or type a note, then press Enter…" autocomplete="off" />
+      <label class="modal-drop" id="addDrop">
+        <input type="file" id="addFileInput" multiple hidden
+               accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+        <span class="ic" data-icon="upload"></span>
+        <span>Click to browse files &amp; PDFs, or drop them anywhere</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="addCancel">Cancel</button>
+        <button class="btn btn-primary" id="addSubmit">Add to library</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Note modal -->
   <div class="modal-overlay" id="noteModal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
@@ -174,6 +199,14 @@
         <button class="btn btn-ghost" id="sectionCancel">Cancel</button>
         <button class="btn btn-primary" id="sectionCreate">Create section</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Full-page drop overlay -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-overlay-inner">
+      <span class="ic" data-icon="upload"></span>
+      <p>Drop to add to your library</p>
     </div>
   </div>
 

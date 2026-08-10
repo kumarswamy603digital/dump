@@ -30,6 +30,50 @@ const timeFilterEl = $("#timeFilter");
 const sectionModal = $("#sectionModal");
 const sectionNameInput = $("#sectionNameInput");
 const sectionError = $("#sectionError");
+const addModal = $("#addModal");
+const addLinkInput = $("#addLinkInput");
+const addFileInput = $("#addFileInput");
+const dropOverlay = $("#dropOverlay");
+
+/* ---------------- Direct add (no AI — saved straight to the library) ---------------- */
+async function addFromText(raw) {
+  const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return;
+  let added = 0;
+  for (const part of parts) {
+    const info = detectLink(part);
+    try {
+      const item = await Items.create({
+        kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
+        note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
+        approved: true, analyze: false,
+      });
+      items.unshift(item); added++;
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  toast(added > 1 ? `Added ${added} items` : "Added to your library");
+}
+async function addFiles(fileList) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+  for (const file of files) {
+    const info = detectFile(file);
+    try {
+      const payload = await Items.fileToPayload(file, {
+        kind: "file", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: humanSize(file.size), approved: true, analyze: false,
+      });
+      items.unshift(await Items.create(payload));
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  toast(files.length > 1 ? `Added ${files.length} files` : "File added");
+}
+function openAddModal() { addLinkInput.value = ""; addModal.hidden = false; setTimeout(() => addLinkInput.focus(), 40); }
+function closeAddModal() { addModal.hidden = true; }
+function submitAdd() { if (addLinkInput.value.trim()) { addFromText(addLinkInput.value); addLinkInput.value = ""; closeAddModal(); } }
 
 /* ---------------- Mutations (organize only — adding happens on the Dump page) ---------------- */
 
@@ -313,6 +357,26 @@ function openItem(id) {
 
 /* ---------------- Wiring ---------------- */
 $("#newSectionBtn").addEventListener("click", openSectionModal);
+$("#addBtn").addEventListener("click", openAddModal);
+$("#addModalClose").addEventListener("click", closeAddModal);
+$("#addCancel").addEventListener("click", closeAddModal);
+$("#addSubmit").addEventListener("click", submitAdd);
+addLinkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAdd(); });
+addFileInput.addEventListener("change", () => { addFiles(addFileInput.files); addFileInput.value = ""; closeAddModal(); });
+addModal.addEventListener("click", (e) => { if (e.target === addModal) closeAddModal(); });
+
+// Drag & drop anywhere -> add directly to the library
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); dragDepth++; dropOverlay.classList.add("show"); } });
+window.addEventListener("dragover", (e) => { if (dropOverlay.classList.contains("show")) e.preventDefault(); });
+window.addEventListener("dragleave", () => { if (dropOverlay.classList.contains("show")) { dragDepth--; if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove("show"); } } });
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove("show");
+  const dt = e.dataTransfer; if (!dt) return;
+  if (dt.files && dt.files.length) { addFiles(dt.files); return; }
+  const text = dt.getData("text/uri-list") || dt.getData("text/plain");
+  if (text) addFromText(text);
+});
 $("#noteModalClose").addEventListener("click", closeNoteModal);
 $("#noteSave").addEventListener("click", () => saveNote(noteInput.value));
 $("#noteClear").addEventListener("click", () => saveNote(""));
@@ -371,8 +435,10 @@ searchInput.addEventListener("input", () => { searchTerm = searchInput.value.tri
 $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed out"); setTimeout(() => (location.href = "signin.html"), 400); });
 
 document.addEventListener("keydown", (e) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); }
+  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); }
+  else if (e.key.toLowerCase() === "n" && !typing && addModal.hidden && noteModal.hidden && sectionModal.hidden) { e.preventDefault(); openAddModal(); }
 });
 
 /* ---------------- Boot ---------------- */
