@@ -502,3 +502,24 @@ themeToggle.addEventListener("click", () => {
   }
   render();
 })();
+
+
+/* ---------------- 9. Marketing site chrome ---------------- */
+
+// Sticky nav shadow on scroll
+const navEl = document.getElementById("nav");
+if (navEl) {
+  const onScroll = () => navEl.classList.toggle("scrolled", window.scrollY > 10);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+}
+
+// Mobile nav toggle
+const navToggle = document.getElementById("navToggle");
+const navLinks = document.getElementById("navLinks");
+if (navToggle && navLinks) {
+  navToggle.addEventListener("click", () => navLinks.classList.toggle("open"));
+  navLinks.querySelectorAll("a").forEach((a) =>
+    a.addEventListener("click", () => navLinks.classList.remove("open"))
+  );
+}
