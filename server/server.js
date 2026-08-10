@@ -205,6 +205,74 @@ async function handleApi(req, res, url) {
     return send(res, 200, { user: publicUser(user) });
   }
 
+  if (p === "/api/auth/me" && method === "PATCH") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const b = await readJson(req);
+    const sets = [], vals = [];
+    if (typeof b.name === "string") {
+      const n = b.name.trim();
+      if (!n) return send(res, 400, { error: "Name can't be empty." });
+      sets.push("name = ?"); vals.push(n);
+    }
+    if (typeof b.email === "string") {
+      const em = b.email.trim().toLowerCase();
+      if (!EMAIL_RE.test(em)) return send(res, 400, { error: "Enter a valid email address." });
+      if (db.prepare("SELECT 1 FROM users WHERE email = ? AND id <> ?").get(em, user.id))
+        return send(res, 409, { error: "That email is already in use." });
+      sets.push("email = ?"); vals.push(em);
+    }
+    if (!sets.length) return send(res, 400, { error: "Nothing to update." });
+    vals.push(user.id);
+    db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    const updated = db.prepare("SELECT id, name, email, created_at FROM users WHERE id = ?").get(user.id);
+    return send(res, 200, { user: publicUser(updated) });
+  }
+
+  if (p === "/api/auth/password" && method === "POST") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const b = await readJson(req);
+    const row = db.prepare("SELECT * FROM users WHERE id = ?").get(user.id);
+    if (!verifyPassword(b.currentPassword || "", row.pass_salt, row.pass_hash))
+      return send(res, 400, { error: "Your current password is incorrect." });
+    if (!b.newPassword || b.newPassword.length < 6)
+      return send(res, 400, { error: "New password must be at least 6 characters." });
+    const { salt, hash } = hashPassword(b.newPassword);
+    db.prepare("UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?").run(hash, salt, user.id);
+    return send(res, 200, { ok: true });
+  }
+
+  if (p === "/api/stats" && method === "GET") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const c = (sql, ...a) => db.prepare(sql).get(user.id, ...a).c;
+    const total = c("SELECT COUNT(*) c FROM items WHERE user_id = ? AND approved = 1");
+    const staged = c("SELECT COUNT(*) c FROM items WHERE user_id = ? AND approved = 0");
+    const pinned = c("SELECT COUNT(*) c FROM items WHERE user_id = ? AND pinned = 1");
+    const sectionCount = c("SELECT COUNT(*) c FROM sections WHERE user_id = ?");
+    const rows = db.prepare("SELECT category, COUNT(*) c FROM items WHERE user_id = ? AND approved = 1 GROUP BY category").all(user.id);
+    const byType = { reels: 0, pdfs: 0, links: 0, images: 0, notes: 0 };
+    for (const r of rows) {
+      const cat = r.category;
+      if (cat === "reel" || cat === "video") byType.reels += r.c;
+      else if (cat === "doc") byType.pdfs += r.c;
+      else if (cat === "photo") byType.images += r.c;
+      else if (cat === "note") byType.notes += r.c;
+      else byType.links += r.c;
+    }
+    return send(res, 200, { stats: { total, staged, pinned, sections: sectionCount, byType } });
+  }
+
+  if (p === "/api/account" && method === "DELETE") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    db.prepare("DELETE FROM items WHERE user_id = ?").run(user.id);
+    db.prepare("DELETE FROM sections WHERE user_id = ?").run(user.id);
+    db.prepare("DELETE FROM users WHERE id = ?").run(user.id);
+    return send(res, 200, { ok: true });
+  }
+
   // --- Sections (custom collections) ---
   if (p === "/api/sections" && method === "GET") {
     const user = authUser(req, url);
@@ -281,12 +349,12 @@ async function handleApi(req, res, url) {
       fileName = b.fileName || b.title || "file";
     }
     db.prepare(`INSERT INTO items
-      (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       id, user.id, b.kind || null, b.category || null, b.section || null,
       b.title || null, b.subtitle || null, b.url || null, b.note || null,
       b.thumbnail || null, mime, fileName, fileBuf,
-      b.approved ? 1 : 0, b.starred ? 1 : 0, Date.now()
+      b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, Date.now()
     );
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
     return send(res, 201, { item: rowToItem(row) });

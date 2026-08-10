@@ -377,13 +377,16 @@ window.addEventListener("drop", (e) => {
 
 /* ---------------- Boot ---------------- */
 (async function init() {
+  // Trust the stored token — only bounce to sign-in when there's no session at all.
   if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }
   injectIcons();
   if (sortSelect) sortSelect.value = sortOrder;
-  const me = await Auth.refresh();
-  if (!me) { location.replace("signin.html"); return; }
   try {
     [items, sections] = await Promise.all([Items.list({ approved: true }), Sections.list()]);
-  } catch (e) { items = []; sections = []; toast(e.message); }
+  } catch (e) {
+    // apiFetch clears the token on a 401 — if that happened, the session is truly invalid.
+    if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }
+    items = items || []; sections = sections || []; toast(e.message);
+  }
   render();
 })();

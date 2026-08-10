@@ -57,6 +57,24 @@ const Auth = {
     try { const d = await apiFetch("/api/auth/me"); setCachedUser(d.user); return d.user; }
     catch { return null; }
   },
+
+  async updateProfile(patch) {
+    const d = await apiFetch("/api/auth/me", { method: "PATCH", body: patch });
+    setCachedUser(d.user);
+    return d.user;
+  },
+  async changePassword(currentPassword, newPassword) {
+    await apiFetch("/api/auth/password", { method: "POST", body: { currentPassword, newPassword } });
+  },
+  async deleteAccount() {
+    await apiFetch("/api/account", { method: "DELETE" });
+    setToken(""); setCachedUser(null);
+  },
+};
+
+/* ---------------- account stats ---------------- */
+const Account = {
+  async stats() { const d = await apiFetch("/api/stats"); return d.stats; },
 };
 
 /* ---------------- items ---------------- */

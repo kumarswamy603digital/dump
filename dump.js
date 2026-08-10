@@ -223,7 +223,7 @@ function setupAuthLink() {
   if (Auth.isLoggedIn()) {
     const name = esc(Auth.firstName());
     wrap.innerHTML = `
-      <span class="nav-greet">Hi, ${name}</span>
+      <a class="nav-greet" href="profile.html" title="Your profile">Hi, ${name}</a>
       <a class="btn btn-primary btn-sm" href="app.html">Open library <span class="ic">${ICONS["arrow-right"]}</span></a>
       <a class="text-link" href="#" id="signOutLink">Sign out</a>`;
     document.getElementById("signOutLink").addEventListener("click", (e) => {
@@ -285,9 +285,12 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !aiModal
   refreshAiChip();
   setupAuthLink();
   if (Auth.isLoggedIn()) {
-    Auth.refresh().then((u) => { if (!u) { setupAuthLink(); render(); } });
     try { staged = await Items.list({ approved: false }); }
-    catch (e) { staged = []; toast(e.message); }
+    catch (e) {
+      staged = [];
+      // Only flip to the logged-out view if the token was actually invalid (401 cleared it).
+      if (!Auth.isLoggedIn()) setupAuthLink(); else toast(e.message);
+    }
   }
   render();
 })();
