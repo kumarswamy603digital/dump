@@ -187,6 +187,46 @@ async function fetchRemotePdf(url) {
   finally { clearTimeout(timer); }
 }
 
+// Fetch a page's Open Graph cover image (first frame for reels/videos, hero for links).
+async function fetchOgImage(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal, redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; DumpBot/1.0; +https://dump.app)",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+    });
+    if (!r.ok) return null;
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("html")) return null;
+
+    // Read only the first ~600 KB (og tags live in <head>).
+    let html = "", received = 0;
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.length;
+      html += dec.decode(value, { stream: true });
+      if (received > 600 * 1024 || /<\/head>/i.test(html)) { try { await reader.cancel(); } catch {} break; }
+    }
+
+    const m =
+      html.match(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:image(?::secure_url)?["']/i) ||
+      html.match(/<meta[^>]+(?:property|name)=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
+    if (!m) return null;
+    let img = m[1].replace(/&amp;/g, "&").trim();
+    try { img = new URL(img, r.url || url).href; } catch {}
+    return img || null;
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
 /* ---------------- AI (Groq) + OCR — server-side ---------------- */
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
@@ -511,11 +551,17 @@ async function handleApi(req, res, url) {
 
     const isImage = (mime || "").startsWith("image/");
 
-    // Server-side AI classification for text/link items (strong Groq model).
+    // Server-side AI classification + cover-image (first frame) fetch — in parallel.
     let section = b.section || null;
-    if (!isImage && (b.url || b.note || b.title)) {
-      const c = await classifyText({ url: b.url, title: b.title, note: b.note });
+    let thumbnail = b.thumbnail || null;
+    if (!isImage && !fileBuf && (b.url || b.note || b.title)) {
+      const needCover = b.url && !thumbnail && ["reel", "video", "link"].includes(b.category);
+      const [c, og] = await Promise.all([
+        classifyText({ url: b.url, title: b.title, note: b.note }),
+        needCover ? fetchOgImage(b.url) : Promise.resolve(null),
+      ]);
       if (c) section = c;
+      if (og) thumbnail = og;
     }
 
     db.prepare(`INSERT INTO items
@@ -523,7 +569,7 @@ async function handleApi(req, res, url) {
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       id, user.id, b.kind || null, b.category || null, section,
       b.title || null, b.subtitle || null, b.url || null, b.note || null,
-      b.thumbnail || null, mime, fileName, fileBuf,
+      thumbnail, mime, fileName, fileBuf,
       b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, Date.now()
     );
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
