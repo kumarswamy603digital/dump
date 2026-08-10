@@ -82,7 +82,7 @@ function inTime(it) {
 }
 function matchesSearch(it) {
   if (!searchTerm) return true;
-  return `${it.title} ${it.subtitle} ${it.url || ""} ${it.note || ""}`.toLowerCase().includes(searchTerm);
+  return `${it.title} ${it.subtitle} ${it.url || ""} ${it.note || ""} ${it.annotation || ""}`.toLowerCase().includes(searchTerm);
 }
 function sortList(list) {
   return list.sort((a, b) => {
@@ -94,8 +94,9 @@ function baseFor(view) {
   let list = items.slice();
   if (view === "starred") list = list.filter((i) => i.starred);
   else if (view === "pinned") list = list.filter((i) => i.pinned);
+  else if (view === "notes") list = list.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note");
   else if (view.startsWith("sec:")) { const id = view.slice(4); list = list.filter((i) => i.sectionId === id); }
-  else if (["docs", "notes", "links", "images"].includes(view)) list = list.filter((i) => bucketOf(i.category) === view);
+  else if (["docs", "links", "images"].includes(view)) list = list.filter((i) => bucketOf(i.category) === view);
   return list;
 }
 function visibleItems(view) {
@@ -128,6 +129,15 @@ function sectionSelect(item) {
 function pinBtn(item) {
   return `<button class="pin-btn ${item.pinned ? "pinned" : ""}" data-pin="${item.id}" title="${item.pinned ? "Unpin" : "Pin"}">${ICONS.pin}<span>${item.pinned ? "Pinned" : "Pin"}</span></button>`;
 }
+function noteBtn(item) {
+  const has = item.annotation && item.annotation.trim();
+  return `<button class="note-btn ${has ? "has-note" : ""}" data-note="${item.id}" title="${has ? "Edit your note" : "Add a note"}">${ICONS.notebook}<span>Note</span></button>`;
+}
+function noteSnippet(item) {
+  const t = (item.annotation || "").trim();
+  if (!t) return "";
+  return `<p class="item-note-snippet"><span class="ic">${ICONS.notebook}</span>${esc(t)}</p>`;
+}
 function controlsRow(item) {
   return `<div class="item-controls">${pinBtn(item)}${sectionSelect(item)}</div>`;
 }
@@ -140,12 +150,15 @@ function cardHtml(item) {
       ${controlsRow(item)}
     </article>`;
   }
-  const href = item.hasFile ? Items.fileUrl(item) : item.url;
-  const open = href ? `<a class="item-open" href="${esc(href)}" target="_blank" rel="noopener">${ICONS.external} Open</a>` : "";
-  return `<article class="item-card" data-id="${item.id}">
+  const openable = (item.hasFile || item.url) ? "is-openable" : "";
+  return `<article class="item-card ${openable}" data-id="${item.id}">
     ${thumbFor(item)}
-    <div class="item-info"><h3 class="item-title">${esc(item.title)}</h3><p class="item-sub">${esc(item.subtitle || item.url || "")}</p></div>
-    <div class="item-actions">${open}<button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button></div>
+    <div class="item-info">
+      <h3 class="item-title">${esc(item.title)}</h3>
+      <p class="item-sub">${esc(item.subtitle || item.url || "")}</p>
+      ${noteSnippet(item)}
+    </div>
+    <div class="item-actions">${noteBtn(item)}<button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button></div>
     ${controlsRow(item)}
   </article>`;
 }
@@ -198,6 +211,8 @@ function renderSectionsManager() {
 function updateCounts() {
   const counts = { all: items.length, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
   items.forEach((it) => { counts[bucketOf(it.category)]++; if (it.starred) counts.starred++; if (it.pinned) counts.pinned++; });
+  // Notes = items you've annotated + standalone note items
+  counts.notes = items.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note").length;
   document.querySelectorAll("[data-count]").forEach((el) => { el.textContent = counts[el.dataset.count] ?? 0; });
 }
 
@@ -230,6 +245,9 @@ function render() {
     } else if (searchTerm) {
       emptyTitle.textContent = "No matches found";
       emptyText.textContent = "Try a different search, or clear it to see everything.";
+    } else if (activeView === "notes") {
+      emptyTitle.textContent = "No notes yet";
+      emptyText.textContent = "Open any item and tap “Note” to jot something down — it'll show up here.";
     } else if (timeFilter === "older") {
       emptyTitle.textContent = "Nothing older than a month";
       emptyText.textContent = "Items you saved more than 30 days ago will show up here.";
@@ -256,8 +274,44 @@ async function submitSection() {
   } catch (e) { sectionError.textContent = e.message; sectionError.classList.add("show"); }
 }
 
+/* ---------------- Note modal ---------------- */
+let editingNoteId = null;
+const noteModal = $("#noteModal");
+const noteInput = $("#noteInput");
+const noteModalSub = $("#noteModalSub");
+function openNoteModal(id) {
+  const it = items.find((x) => x.id === id); if (!it) return;
+  editingNoteId = id;
+  noteInput.value = it.annotation || "";
+  noteModalSub.textContent = `Note for “${it.title}”`;
+  noteModal.hidden = false;
+  setTimeout(() => noteInput.focus(), 40);
+}
+function closeNoteModal() { noteModal.hidden = true; editingNoteId = null; }
+async function saveNote(text) {
+  const id = editingNoteId;
+  const it = items.find((x) => x.id === id);
+  closeNoteModal();
+  if (!it) return;
+  it.annotation = text;
+  render();
+  try { await Items.update(id, { annotation: text }); } catch (e) { toast(e.message); }
+  toast(text.trim() ? "Note saved" : "Note cleared");
+}
+
+/* ---------------- Open an item (click the card) ---------------- */
+function openItem(id) {
+  const it = items.find((x) => x.id === id); if (!it) return;
+  const href = it.hasFile ? Items.fileUrl(it) : it.url;
+  if (href) window.open(href, "_blank", "noopener");
+}
+
 /* ---------------- Wiring ---------------- */
 $("#newSectionBtn").addEventListener("click", openSectionModal);
+$("#noteModalClose").addEventListener("click", closeNoteModal);
+$("#noteSave").addEventListener("click", () => saveNote(noteInput.value));
+$("#noteClear").addEventListener("click", () => saveNote(""));
+noteModal.addEventListener("click", (e) => { if (e.target === noteModal) closeNoteModal(); });
 $("#sectionModalClose").addEventListener("click", closeSectionModal);
 $("#sectionCancel").addEventListener("click", closeSectionModal);
 $("#sectionCreate").addEventListener("click", submitSection);
@@ -274,6 +328,10 @@ mainEl.addEventListener("click", (e) => {
   const del = e.target.closest("[data-del]"); if (del) return removeItem(del.getAttribute("data-del"));
   const star = e.target.closest("[data-star]"); if (star) return toggleStar(star.getAttribute("data-star"));
   const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
+  const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
+  // Click the card body -> open the item (reel / link / file)
+  const card = e.target.closest(".item-card.is-openable");
+  if (card && !e.target.closest("button, select, a, .item-actions, .item-controls")) openItem(card.dataset.id);
 });
 mainEl.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-section]");
@@ -309,7 +367,7 @@ $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed o
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape" && !sectionModal.hidden) closeSectionModal();
+  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); }
 });
 
 /* ---------------- Boot ---------------- */

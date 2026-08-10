@@ -150,7 +150,8 @@ function dumpCardHtml(item) {
          <p class="dcard-title">${esc(item.title)}</p>
          <p class="dcard-sub">${esc(item.subtitle || item.url || "")}</p>
        </div>`;
-  return `<article class="dcard" data-id="${item.id}">
+  const openable = (item.hasFile || item.url) ? "is-openable" : "";
+  return `<article class="dcard ${openable}" data-id="${item.id}">
     <div class="dcard-top"><button class="dcard-del" data-del="${item.id}" title="Discard">${ICONS.x}</button></div>
     ${body}
     <div class="dcard-foot">${sectionSelect(item)}</div>
@@ -211,7 +212,12 @@ approveBtn.addEventListener("click", approveAll);
 
 $("#sections").addEventListener("click", (e) => {
   const del = e.target.closest("[data-del]");
-  if (del) removeStaged(del.getAttribute("data-del"));
+  if (del) { removeStaged(del.getAttribute("data-del")); return; }
+  const card = e.target.closest(".dcard.is-openable");
+  if (card && !e.target.closest("button, select")) {
+    const it = staged.find((s) => s.id === card.dataset.id);
+    if (it) { const href = it.hasFile ? Items.fileUrl(it) : it.url; if (href) window.open(href, "_blank", "noopener"); }
+  }
 });
 $("#sections").addEventListener("change", (e) => {
   const mv = e.target.closest("[data-move]");

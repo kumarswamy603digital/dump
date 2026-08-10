@@ -96,6 +96,7 @@ function ensureColumn(table, col, def) {
 }
 ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("items", "section_id", "TEXT");
+ensureColumn("items", "annotation", "TEXT");
 
 /* ---------------- Crypto helpers ---------------- */
 function hashPassword(pw) {
@@ -295,7 +296,7 @@ function rowToItem(r) {
     title: r.title, subtitle: r.subtitle, url: r.url, note: r.note,
     thumbnail: r.thumbnail, mime: r.mime,
     approved: !!r.approved, starred: !!r.starred, pinned: !!r.pinned,
-    sectionId: r.section_id || null, createdAt: r.created_at,
+    sectionId: r.section_id || null, annotation: r.annotation || "", createdAt: r.created_at,
     hasFile: !!r.file_name,
     fileUrl: r.file_name ? `/api/files/${r.id}` : null,
   };
@@ -530,6 +531,7 @@ async function handleApi(req, res, url) {
     if (typeof b.approved === "boolean") { sets.push("approved = ?"); vals.push(b.approved ? 1 : 0); }
     if (typeof b.starred === "boolean") { sets.push("starred = ?"); vals.push(b.starred ? 1 : 0); }
     if (typeof b.pinned === "boolean") { sets.push("pinned = ?"); vals.push(b.pinned ? 1 : 0); }
+    if (typeof b.annotation === "string") { sets.push("annotation = ?"); vals.push(b.annotation); }
     if ("section_id" in b) {
       if (b.section_id) {
         const s = db.prepare("SELECT id FROM sections WHERE id = ? AND user_id = ?").get(b.section_id, user.id);

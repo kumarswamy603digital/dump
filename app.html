@@ -27,7 +27,7 @@
 
     <div class="topbar-actions">
       <button class="btn btn-secondary btn-sm" id="vaultBtn" title="Your pinned items & sections">
-        <span class="ic" data-icon="lock"></span> User Vault
+        <span class="ic" data-icon="lock"></span> <span class="vault-label">User Vault</span>
       </button>
       <a class="icon-btn" href="profile.html" title="Your profile" aria-label="Your profile">
         <span class="ic" data-icon="user"></span>
@@ -142,6 +142,22 @@
         </a>
       </div>
     </main>
+  </div>
+
+  <!-- Note modal -->
+  <div class="modal-overlay" id="noteModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+      <div class="modal-head">
+        <h3 id="noteModalTitle">Your note</h3>
+        <button class="icon-btn" id="noteModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="noteModalSub">Jot down anything about this item.</p>
+      <textarea id="noteInput" class="modal-input note-textarea" rows="5" placeholder="Type your note…"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="noteClear">Clear note</button>
+        <button class="btn btn-primary" id="noteSave">Save note</button>
+      </div>
+    </div>
   </div>
 
   <!-- Create section modal -->

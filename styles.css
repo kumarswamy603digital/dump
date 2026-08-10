@@ -759,3 +759,66 @@ body {
 .item-thumb.pdf, .dcard-thumb.pdf { background: #fff; }
 .pdf-frame { width: 100%; height: 100%; border: 0; pointer-events: none; background: #fff; }
 .dcard-thumb.pdf { aspect-ratio: 16 / 11; }
+
+
+/* ============================================================
+   Per-item notes + clickable cards
+   ============================================================ */
+.note-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: inherit; font-size: 13px; font-weight: 550; color: var(--ink-2); padding: 8px 10px; border-radius: 9px; background: var(--panel-soft); border: 1px solid var(--line); cursor: pointer; transition: color 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease); }
+.note-btn svg { width: 14px; height: 14px; }
+.note-btn:hover { background: var(--active); color: var(--ink); }
+.note-btn.has-note { color: var(--primary); background: var(--terra-soft); border-color: var(--active-line); }
+
+.item-note-snippet { display: flex; gap: 6px; align-items: flex-start; margin: 8px 0 0; padding: 8px 10px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 9px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; word-break: break-word; }
+.item-note-snippet .ic { flex-shrink: 0; }
+.item-note-snippet .ic svg { width: 13px; height: 13px; color: var(--terra); margin-top: 1px; }
+
+.note-textarea { width: 100%; resize: vertical; min-height: 110px; font-family: inherit; font-size: 14px; line-height: 1.5; }
+
+/* Clickable cards */
+.item-card.is-openable .item-thumb, .item-card.is-openable .item-info { cursor: pointer; }
+.item-card.is-openable:hover .item-title { color: var(--primary); }
+.dcard.is-openable .dcard-thumb, .dcard.is-openable .dcard-info { cursor: pointer; }
+.dcard.is-openable:hover .dcard-title { color: var(--primary); }
+
+/* ============================================================
+   MOBILE OPTIMIZATION
+   ============================================================ */
+@media (max-width: 900px) {
+  .nav-heading { width: 100%; margin-top: 14px; }
+  .nav-sections { flex-direction: row; flex-wrap: wrap; width: 100%; }
+  .nav-subitem { padding-left: 12px; }
+}
+@media (max-width: 720px) {
+  /* Library top bar wraps; search drops to its own full-width row */
+  .topbar { flex-wrap: wrap; height: auto; padding: 10px 14px; gap: 10px; }
+  .search { order: 3; flex-basis: 100%; max-width: none; margin: 0; }
+  .topbar-actions { margin-left: auto; }
+  .vault-label { display: none; }
+  #vaultBtn { padding: 9px 12px; }
+
+  /* Header controls stack full width */
+  .main-head-left, .main-head-right { width: 100%; }
+  .main-head-right { justify-content: space-between; }
+  .segmented { width: 100%; }
+  .seg { flex: 1; text-align: center; }
+  #newSectionBtn { flex: 1; justify-content: center; }
+
+  .item-controls { flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  /* Dump page + landing nav wrap */
+  .lp-nav { flex-wrap: wrap; gap: 10px; padding: 16px; }
+  .lp-nav-actions, .auth-area { flex-wrap: wrap; gap: 8px; }
+  .nav-greet { padding: 6px 4px; }
+
+  .section { padding-left: 18px; padding-right: 18px; }
+  .modal { padding: 20px; }
+  .btn, .seg, .nav-item, .pin-btn, .note-btn { min-height: 40px; }
+  .sec-select { min-height: 40px; }
+}
+@media (max-width: 420px) {
+  .grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .item-title { font-size: 13.5px; }
+  .item-actions, .item-controls { padding-left: 10px; padding-right: 10px; }
+}
