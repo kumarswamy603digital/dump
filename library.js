@@ -190,7 +190,15 @@ nav.addEventListener("click", (e) => {
 
 sortSelect.addEventListener("change", () => { sortOrder = sortSelect.value; render(); });
 searchInput.addEventListener("input", () => { searchTerm = searchInput.value.trim().toLowerCase(); render(); });
-$("#logoutBtn").addEventListener("click", () => toast("You're all set — nothing to sign out of yet"));
+$("#logoutBtn").addEventListener("click", () => {
+  if (typeof isLoggedIn === "function" && isLoggedIn()) {
+    logout();
+    toast("Signed out");
+    setTimeout(() => (location.href = "signin.html"), 500);
+  } else {
+    location.href = "signin.html";
+  }
+});
 
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");

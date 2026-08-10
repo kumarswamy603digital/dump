@@ -558,3 +558,64 @@ body {
   .lp-nav { padding: 18px 16px; }
   .ai-chip span:not(.ic) { display: none; }
 }
+
+
+/* ============================================================
+   FIX: base capture components (dropzone + paste input)
+   These were dropped when the library moved to a modal, but the
+   Dump page reuses them — restored here in the warm theme.
+   ============================================================ */
+
+.dropzone {
+  border: 2px dashed var(--line-2); border-radius: 18px; padding: 34px 24px;
+  background: var(--panel); cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), transform 0.2s var(--ease);
+}
+.dropzone:hover, .dropzone:focus-visible { border-color: var(--terra); background: var(--panel-soft); outline: none; }
+.dropzone.dragover { border-color: var(--terra); background: var(--terra-soft); transform: scale(1.01); }
+.dropzone-inner { display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.dropzone-title { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0; }
+.dropzone-hint { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
+.file-pick { pointer-events: auto; }
+
+.paste-row { display: flex; gap: 10px; }
+.link-input {
+  flex: 1; padding: 13px 16px; border-radius: 12px;
+  border: 1px solid var(--line-2); background: var(--panel); color: var(--ink);
+  font-family: inherit; font-size: 15px;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.link-input::placeholder { color: var(--muted); }
+.link-input:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(176, 96, 58, 0.14); }
+
+/* Nav text link (Sign in / Sign out) */
+.text-link { color: var(--ink-2); text-decoration: none; font-weight: 550; font-size: 14px; padding: 8px 8px; border-radius: 8px; transition: color 0.18s var(--ease), background 0.18s var(--ease); white-space: nowrap; }
+.text-link:hover { color: var(--ink); background: var(--panel-soft); }
+
+/* ============================================================
+   AUTH PAGES (sign in / sign up)
+   ============================================================ */
+
+.auth-page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; gap: 22px; background: var(--paper); }
+.auth-home { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.auth-home .brand-ic { color: var(--primary); display: inline-flex; }
+.auth-home .brand-ic svg { width: 22px; height: 22px; }
+.auth-home .brand-name { font-family: var(--serif); font-size: 20px; font-weight: 600; }
+
+.auth-card { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 34px 32px; box-shadow: var(--shadow); animation: rise 0.3s var(--ease); }
+.auth-title { font-family: var(--serif); font-size: 1.7rem; font-weight: 600; color: var(--ink); margin: 0 0 6px; text-align: center; }
+.auth-sub { color: var(--muted); font-size: 14.5px; text-align: center; margin: 0 0 26px; }
+
+.auth-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.auth-label { font-size: 13px; font-weight: 550; color: var(--ink-2); }
+.auth-input { padding: 12px 14px; border-radius: 11px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-family: inherit; font-size: 15px; transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease); }
+.auth-input::placeholder { color: var(--muted); }
+.auth-input:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(176, 96, 58, 0.14); }
+
+.auth-error { display: none; background: #f7e5df; border: 1px solid #e6c3b7; color: #8a3320; font-size: 13.5px; padding: 10px 13px; border-radius: 10px; margin-bottom: 16px; }
+.auth-error.show { display: block; }
+.auth-submit { width: 100%; margin-top: 6px; }
+.auth-switch { text-align: center; margin: 20px 0 0; font-size: 14px; color: var(--muted); }
+.auth-switch a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.auth-switch a:hover { text-decoration: underline; }
+.auth-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 16px; max-width: 420px; line-height: 1.5; }

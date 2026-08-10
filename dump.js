@@ -268,9 +268,29 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !aiModal
 
 /* ---------------- Boot ---------------- */
 
+function setupAuthLink() {
+  const link = document.getElementById("authLink");
+  if (!link || typeof currentUser !== "function") return;
+  const user = currentUser();
+  if (user) {
+    link.textContent = `Hi ${firstName(user)} · Sign out`;
+    link.href = "#";
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      logout();
+      toast("Signed out");
+      setTimeout(() => location.reload(), 500);
+    });
+  } else {
+    link.textContent = "Sign in";
+    link.href = "signin.html";
+  }
+}
+
 (async function init() {
   injectIcons();
   refreshAiChip();
+  setupAuthLink();
   try {
     staged = (await dbAll())
       .filter((it) => it.approved === false)
