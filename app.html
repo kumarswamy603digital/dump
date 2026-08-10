@@ -26,8 +26,8 @@
     </div>
 
     <div class="topbar-actions">
-      <button class="btn btn-primary" id="addBtn">
-        <span class="ic" data-icon="plus"></span> Add
+      <button class="btn btn-secondary btn-sm" id="vaultBtn" title="Your pinned items & sections">
+        <span class="ic" data-icon="lock"></span> User Vault
       </button>
       <a class="icon-btn" href="profile.html" title="Your profile" aria-label="Your profile">
         <span class="ic" data-icon="user"></span>
@@ -137,36 +137,11 @@
           Upload a <span class="link-accent">PDF</span> or image, jot a note, or save a link.
           You can also drop files anywhere on this page.
         </p>
-        <button class="btn btn-primary" id="addFirstBtn">
-          <span class="ic" data-icon="plus"></span> Add first item
-        </button>
+        <a class="btn btn-primary" href="index.html">
+          <span class="ic" data-icon="upload"></span> Go to the dump
+        </a>
       </div>
     </main>
-  </div>
-
-  <!-- Add modal -->
-  <div class="modal-overlay" id="modalOverlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal-head">
-        <h3 id="modalTitle">Add to your workspace</h3>
-        <button class="icon-btn" id="modalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
-      </div>
-      <p class="modal-sub">Paste a link or note, or upload a file. We'll figure out where it goes.</p>
-      <div class="modal-field">
-        <input type="text" id="linkInput" class="modal-input"
-               placeholder="Paste a link or type a note, then press Enter…" autocomplete="off" />
-      </div>
-      <label class="modal-drop" id="modalDrop">
-        <input type="file" id="fileInput" multiple hidden
-               accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
-        <span class="ic" data-icon="upload"></span>
-        <span>Click to browse files, or drop them anywhere</span>
-      </label>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" id="modalCancel">Cancel</button>
-        <button class="btn btn-primary" id="addLinkBtn">Add to workspace</button>
-      </div>
-    </div>
   </div>
 
   <!-- Create section modal -->
@@ -183,14 +158,6 @@
         <button class="btn btn-ghost" id="sectionCancel">Cancel</button>
         <button class="btn btn-primary" id="sectionCreate">Create section</button>
       </div>
-    </div>
-  </div>
-
-  <!-- Full-page drop overlay -->
-  <div class="drop-overlay" id="dropOverlay">
-    <div class="drop-overlay-inner">
-      <span class="ic" data-icon="upload"></span>
-      <p>Drop to add to your workspace</p>
     </div>
   </div>
 

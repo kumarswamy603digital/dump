@@ -141,6 +141,9 @@ function thumbFor(item) {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
     if (src) return `<div class="dcard-thumb"><img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
   }
+  if (item.category === "doc" && item.hasFile) {
+    return `<div class="dcard-thumb pdf"><iframe class="pdf-frame" src="${esc(Items.fileUrl(item))}#toolbar=0&navpanes=0&view=FitH" title="PDF preview"></iframe></div>`;
+  }
   if (item.thumbnail) {
     return `<div class="dcard-thumb"><img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}" onerror="this.remove()" /></div>`;
   }

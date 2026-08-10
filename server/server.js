@@ -152,6 +152,25 @@ function authUser(req, url) {
 function publicUser(u) { return { id: u.id, name: u.name, email: u.email, createdAt: u.created_at }; }
 function issueToken(userId) { return signToken({ uid: userId, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 }); }
 
+// Fetch a remote PDF (with timeout + size cap) so it can be stored locally.
+async function fetchRemotePdf(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const r = await fetch(url, { signal: controller.signal, redirect: "follow", headers: { "User-Agent": "DumpBot/1.0" } });
+    if (!r.ok) return null;
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("pdf") && !/\.pdf(\?|#|$)/i.test(url)) return null;
+    const ab = await r.arrayBuffer();
+    if (ab.byteLength === 0 || ab.byteLength > 25 * 1024 * 1024) return null;
+    let name = "document.pdf";
+    try { name = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || "document.pdf"); } catch {}
+    if (!/\.pdf$/i.test(name)) name += ".pdf";
+    return { buf: Buffer.from(ab), name };
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
 function rowToItem(r) {
   return {
     id: r.id, kind: r.kind, category: r.category, section: r.section,
@@ -347,6 +366,11 @@ async function handleApi(req, res, url) {
       const base64 = String(b.fileData).replace(/^data:[^;]+;base64,/, "");
       fileBuf = Buffer.from(base64, "base64");
       fileName = b.fileName || b.title || "file";
+    }
+    // Auto-capture PDF links: fetch the file server-side so it's stored & previewable.
+    if (!fileBuf && b.url && /\.pdf(\?|#|$)/i.test(b.url)) {
+      const pdf = await fetchRemotePdf(b.url);
+      if (pdf) { fileBuf = pdf.buf; mime = "application/pdf"; fileName = pdf.name; }
     }
     db.prepare(`INSERT INTO items
       (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, created_at)

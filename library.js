@@ -22,57 +22,16 @@ const emptyState = $("#emptyState");
 const emptyTitle = $("#emptyTitle");
 const emptyText = $("#emptyText");
 const countLabel = $("#countLabel");
-const fileInput = $("#fileInput");
-const linkInput = $("#linkInput");
 const searchInput = $("#searchInput");
 const sortSelect = $("#sortSelect");
 const nav = $("#nav");
 const navSections = $("#navSections");
-const modalOverlay = $("#modalOverlay");
-const dropOverlay = $("#dropOverlay");
 const timeFilterEl = $("#timeFilter");
 const sectionModal = $("#sectionModal");
 const sectionNameInput = $("#sectionNameInput");
 const sectionError = $("#sectionError");
 
-/* ---------------- Adding (direct to library, approved) ---------------- */
-
-async function addFromText(raw) {
-  const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-  if (!parts.length) return;
-  let added = 0, lastCat = null;
-  for (const part of parts) {
-    const info = detectLink(part);
-    try {
-      const item = await Items.create({
-        kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
-        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
-        note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
-        approved: true,
-      });
-      items.unshift(item); lastCat = info.category; added++;
-    } catch (e) { return toast(e.message); }
-  }
-  render();
-  toast(added > 1 ? `Added ${added} items` : `Saved to ${capitalize(bucketOf(lastCat))}`);
-}
-
-async function addFiles(fileList) {
-  const files = Array.from(fileList);
-  if (!files.length) return;
-  for (const file of files) {
-    const info = detectFile(file);
-    try {
-      const payload = await Items.fileToPayload(file, {
-        kind: "file", category: info.category, section: sectionOf(info.category),
-        title: info.title, subtitle: humanSize(file.size), approved: true,
-      });
-      items.unshift(await Items.create(payload));
-    } catch (e) { return toast(e.message); }
-  }
-  render();
-  toast(files.length > 1 ? `Uploaded ${files.length} files` : "File uploaded");
-}
+/* ---------------- Mutations (organize only — adding happens on the Dump page) ---------------- */
 
 async function removeItem(id) {
   try { await Items.remove(id); } catch (e) { return toast(e.message); }
@@ -153,6 +112,9 @@ function thumbFor(item) {
   if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
     if (src) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
+  }
+  if (item.category === "doc" && item.hasFile) {
+    return `<div class="item-thumb pdf">${starBtn(item)}<iframe class="pdf-frame" src="${esc(Items.fileUrl(item))}#toolbar=0&navpanes=0&view=FitH" title="${esc(item.title)}"></iframe></div>`;
   }
   if (item.thumbnail) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}" onerror="this.remove()" /></div>`;
   return `<div class="item-thumb ${tint}">${starBtn(item)}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span><span class="thumb-ic ic">${ICONS[meta.icon]}</span></div>`;
@@ -280,10 +242,6 @@ function render() {
   }
 }
 
-/* ---------------- Add modal ---------------- */
-function openModal() { modalOverlay.hidden = false; setTimeout(() => linkInput.focus(), 40); }
-function closeModal() { modalOverlay.hidden = true; linkInput.value = ""; }
-
 /* ---------------- Section modal ---------------- */
 function openSectionModal() { sectionError.classList.remove("show"); sectionNameInput.value = ""; sectionModal.hidden = false; setTimeout(() => sectionNameInput.focus(), 40); }
 function closeSectionModal() { sectionModal.hidden = true; }
@@ -299,16 +257,6 @@ async function submitSection() {
 }
 
 /* ---------------- Wiring ---------------- */
-$("#addBtn").addEventListener("click", openModal);
-$("#addFirstBtn").addEventListener("click", openModal);
-$("#modalClose").addEventListener("click", closeModal);
-$("#modalCancel").addEventListener("click", closeModal);
-modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
-function submitLink() { if (linkInput.value.trim()) { addFromText(linkInput.value); closeModal(); } }
-$("#addLinkBtn").addEventListener("click", submitLink);
-linkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitLink(); });
-fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; closeModal(); });
-
 $("#newSectionBtn").addEventListener("click", openSectionModal);
 $("#sectionModalClose").addEventListener("click", closeSectionModal);
 $("#sectionCancel").addEventListener("click", closeSectionModal);
@@ -343,6 +291,9 @@ nav.addEventListener("click", (e) => {
   if (item) setView(item.dataset.view);
 });
 
+// Top-right User Vault button -> jump to the vault (Pinned) view
+$("#vaultBtn").addEventListener("click", () => setView("pinned"));
+
 // Time filter
 timeFilterEl.addEventListener("click", (e) => {
   const seg = e.target.closest(".seg"); if (!seg) return;
@@ -357,22 +308,8 @@ searchInput.addEventListener("input", () => { searchTerm = searchInput.value.tri
 $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed out"); setTimeout(() => (location.href = "signin.html"), 400); });
 
 document.addEventListener("keydown", (e) => {
-  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape") { if (!modalOverlay.hidden) closeModal(); if (!sectionModal.hidden) closeSectionModal(); }
-  else if (e.key.toLowerCase() === "n" && !typing && modalOverlay.hidden && sectionModal.hidden) { e.preventDefault(); openModal(); }
-});
-
-let dragDepth = 0;
-window.addEventListener("dragenter", (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); dragDepth++; dropOverlay.classList.add("show"); } });
-window.addEventListener("dragover", (e) => { if (dropOverlay.classList.contains("show")) e.preventDefault(); });
-window.addEventListener("dragleave", () => { if (dropOverlay.classList.contains("show")) { dragDepth--; if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove("show"); } } });
-window.addEventListener("drop", (e) => {
-  e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove("show");
-  const dt = e.dataTransfer; if (!dt) return;
-  if (dt.files && dt.files.length) { addFiles(dt.files); return; }
-  const text = dt.getData("text/uri-list") || dt.getData("text/plain");
-  if (text) addFromText(text);
+  else if (e.key === "Escape" && !sectionModal.hidden) closeSectionModal();
 });
 
 /* ---------------- Boot ---------------- */
