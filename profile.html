@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your profile — Dump</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>" />
+</head>
+<body class="profile-page">
+  <header class="lp-nav">
+    <a class="brand" href="index.html">
+      <span class="ic brand-ic" data-icon="book-open"></span>
+      <span class="brand-name">Dump</span>
+    </a>
+    <div class="lp-nav-actions">
+      <a class="text-link" href="index.html">Home</a>
+      <a class="btn btn-primary btn-sm" href="app.html">Open library <span class="ic" data-icon="arrow-right"></span></a>
+    </div>
+  </header>
+
+  <main class="profile-wrap">
+    <section class="profile-hero">
+      <div class="profile-avatar" id="avatar">–</div>
+      <div>
+        <h1 class="profile-name" id="pName">…</h1>
+        <p class="profile-email" id="pEmail"></p>
+        <p class="profile-since" id="pSince"></p>
+      </div>
+    </section>
+
+    <section class="stat-grid" id="statGrid"></section>
+    <div class="type-breakdown" id="typeBreakdown"></div>
+
+    <div class="profile-grid">
+      <!-- Profile details -->
+      <section class="pcard">
+        <h2 class="pcard-title"><span class="ic" data-icon="user"></span> Profile details</h2>
+        <div class="auth-error" id="profileError"></div>
+        <div class="pmsg" id="profileMsg"></div>
+        <div class="auth-field">
+          <label class="auth-label" for="nameInput">Name</label>
+          <input class="auth-input" id="nameInput" type="text" autocomplete="name" />
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="emailInput">Email</label>
+          <input class="auth-input" id="emailInput" type="email" autocomplete="email" />
+        </div>
+        <button class="btn btn-primary" id="saveProfile">Save changes</button>
+      </section>
+
+      <!-- Change password -->
+      <section class="pcard">
+        <h2 class="pcard-title"><span class="ic" data-icon="lock"></span> Change password</h2>
+        <div class="auth-error" id="pwError"></div>
+        <div class="pmsg" id="pwMsg"></div>
+        <div class="auth-field">
+          <label class="auth-label" for="curPw">Current password</label>
+          <input class="auth-input" id="curPw" type="password" autocomplete="current-password" />
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="newPw">New password</label>
+          <input class="auth-input" id="newPw" type="password" autocomplete="new-password" />
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="confPw">Confirm new password</label>
+          <input class="auth-input" id="confPw" type="password" autocomplete="new-password" />
+        </div>
+        <button class="btn btn-primary" id="savePw">Update password</button>
+      </section>
+
+      <!-- AI -->
+      <section class="pcard">
+        <h2 class="pcard-title"><span class="ic" data-icon="sparkles"></span> AI classification</h2>
+        <p class="pcard-sub">Connect Groq to auto-sort what you dump. Your key is stored only in this browser.</p>
+        <div class="pmsg" id="aiMsg"></div>
+        <div class="auth-field">
+          <label class="auth-label" for="groqKey">Groq API key</label>
+          <input class="auth-input" id="groqKey" type="password" placeholder="gsk_…" autocomplete="off" />
+        </div>
+        <div class="pcard-actions">
+          <button class="btn btn-ghost" id="groqRemove">Remove key</button>
+          <button class="btn btn-primary" id="groqSave">Save key</button>
+        </div>
+      </section>
+
+      <!-- Danger zone -->
+      <section class="pcard danger">
+        <h2 class="pcard-title">Danger zone</h2>
+        <p class="pcard-sub">Sign out on this device, or permanently delete your account and everything stored in it.</p>
+        <div class="pcard-actions">
+          <button class="btn btn-ghost" id="signOutBtn"><span class="ic" data-icon="log-out"></span> Sign out</button>
+          <button class="btn btn-danger" id="deleteBtn"><span class="ic" data-icon="trash"></span> Delete account</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="core.js"></script>
+  <script src="api.js"></script>
+  <script src="profile.js"></script>
+</body>
+</html>
