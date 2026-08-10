@@ -70,6 +70,19 @@
           <span class="nav-label">Starred</span>
           <span class="nav-count" data-count="starred">0</span>
         </button>
+
+        <p class="nav-heading">User Vault</p>
+        <button class="nav-item" data-view="pinned">
+          <span class="ic" data-icon="pin"></span>
+          <span class="nav-label">Pinned</span>
+          <span class="nav-count" data-count="pinned">0</span>
+        </button>
+        <button class="nav-item" data-view="sections">
+          <span class="ic" data-icon="folder"></span>
+          <span class="nav-label">Sections</span>
+          <span class="nav-count" data-count="sections">0</span>
+        </button>
+        <div class="nav-sections" id="navSections"></div>
       </nav>
 
       <div class="shortcuts">
@@ -82,22 +95,36 @@
     <!-- Main -->
     <main class="main">
       <div class="main-head">
-        <p class="item-count" id="countLabel">0 items</p>
-        <div class="sort">
-          <span class="ic sort-ic" data-icon="arrow-up-down"></span>
-          <div class="select-wrap">
-            <select id="sortSelect" class="select">
-              <option value="new">Newest first</option>
-              <option value="old">Oldest first</option>
-              <option value="az">Title A–Z</option>
-            </select>
-            <span class="ic select-chevron" data-icon="chevron-down"></span>
+        <div class="main-head-left">
+          <p class="item-count" id="countLabel">0 items</p>
+          <div class="segmented" id="timeFilter" role="tablist" aria-label="Time filter">
+            <button class="seg active" data-time="latest" role="tab">Latest</button>
+            <button class="seg" data-time="older" role="tab">After one month</button>
           </div>
+        </div>
+        <div class="main-head-right">
+          <div class="sort">
+            <span class="ic sort-ic" data-icon="arrow-up-down"></span>
+            <div class="select-wrap">
+              <select id="sortSelect" class="select">
+                <option value="new">Newest first</option>
+                <option value="old">Oldest first</option>
+                <option value="az">Title A–Z</option>
+              </select>
+              <span class="ic select-chevron" data-icon="chevron-down"></span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="newSectionBtn">
+            <span class="ic" data-icon="plus"></span> Create new section
+          </button>
         </div>
       </div>
 
-      <!-- Item grid -->
+      <!-- Item grid (category / section / starred views) -->
       <div class="grid" id="grid"></div>
+
+      <!-- Vault views (pinned groups / sections management) -->
+      <div class="vault" id="vaultView" hidden></div>
 
       <!-- Empty state -->
       <div class="empty-card" id="emptyState">
@@ -135,6 +162,23 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" id="modalCancel">Cancel</button>
         <button class="btn btn-primary" id="addLinkBtn">Add to workspace</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create section modal -->
+  <div class="modal-overlay" id="sectionModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sectionModalTitle">
+      <div class="modal-head">
+        <h3 id="sectionModalTitle">Create a new section</h3>
+        <button class="icon-btn" id="sectionModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub">Group related items into your own section — like "Design inspo" or "Thesis".</p>
+      <div class="auth-error" id="sectionError"></div>
+      <input type="text" id="sectionNameInput" class="modal-input" placeholder="Section name" autocomplete="off" maxlength="60" />
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="sectionCancel">Cancel</button>
+        <button class="btn btn-primary" id="sectionCreate">Create section</button>
       </div>
     </div>
   </div>

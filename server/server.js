@@ -58,11 +58,29 @@ db.exec(`
     file_data BLOB,
     approved INTEGER NOT NULL DEFAULT 0,
     starred INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    section_id TEXT,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
   CREATE INDEX IF NOT EXISTS idx_items_user ON items(user_id);
+  CREATE TABLE IF NOT EXISTS sections (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_sections_user ON sections(user_id);
 `);
+
+// Safe migration for databases created before pinned/section_id existed.
+function ensureColumn(table, col, def) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("items", "section_id", "TEXT");
 
 /* ---------------- Crypto helpers ---------------- */
 function hashPassword(pw) {
@@ -139,7 +157,8 @@ function rowToItem(r) {
     id: r.id, kind: r.kind, category: r.category, section: r.section,
     title: r.title, subtitle: r.subtitle, url: r.url, note: r.note,
     thumbnail: r.thumbnail, mime: r.mime,
-    approved: !!r.approved, starred: !!r.starred, createdAt: r.created_at,
+    approved: !!r.approved, starred: !!r.starred, pinned: !!r.pinned,
+    sectionId: r.section_id || null, createdAt: r.created_at,
     hasFile: !!r.file_name,
     fileUrl: r.file_name ? `/api/files/${r.id}` : null,
   };
@@ -184,6 +203,41 @@ async function handleApi(req, res, url) {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
     return send(res, 200, { user: publicUser(user) });
+  }
+
+  // --- Sections (custom collections) ---
+  if (p === "/api/sections" && method === "GET") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const rows = db.prepare(
+      `SELECT s.id, s.name, s.created_at,
+              (SELECT COUNT(*) FROM items i WHERE i.section_id = s.id) AS cnt
+       FROM sections s WHERE s.user_id = ? ORDER BY s.created_at DESC`
+    ).all(user.id);
+    return send(res, 200, { sections: rows.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, count: r.cnt })) });
+  }
+
+  if (p === "/api/sections" && method === "POST") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const b = await readJson(req);
+    const name = (b.name || "").trim();
+    if (!name) return send(res, 400, { error: "Section name is required." });
+    if (name.length > 60) return send(res, 400, { error: "Section name is too long." });
+    if (db.prepare("SELECT 1 FROM sections WHERE user_id = ? AND lower(name) = lower(?)").get(user.id, name))
+      return send(res, 409, { error: "You already have a section with that name." });
+    const id = uid();
+    db.prepare("INSERT INTO sections (id, user_id, name, created_at) VALUES (?,?,?,?)").run(id, user.id, name, Date.now());
+    return send(res, 201, { section: { id, name, createdAt: Date.now(), count: 0 } });
+  }
+
+  const sectionMatch = p.match(/^\/api\/sections\/([\w-]+)$/);
+  if (sectionMatch && method === "DELETE") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    db.prepare("UPDATE items SET section_id = NULL WHERE section_id = ? AND user_id = ?").run(sectionMatch[1], user.id);
+    db.prepare("DELETE FROM sections WHERE id = ? AND user_id = ?").run(sectionMatch[1], user.id);
+    return send(res, 200, { ok: true });
   }
 
   // --- File serving (token via query for <img>/<a>) ---
@@ -249,6 +303,14 @@ async function handleApi(req, res, url) {
     if (typeof b.section === "string") { sets.push("section = ?"); vals.push(b.section); }
     if (typeof b.approved === "boolean") { sets.push("approved = ?"); vals.push(b.approved ? 1 : 0); }
     if (typeof b.starred === "boolean") { sets.push("starred = ?"); vals.push(b.starred ? 1 : 0); }
+    if (typeof b.pinned === "boolean") { sets.push("pinned = ?"); vals.push(b.pinned ? 1 : 0); }
+    if ("section_id" in b) {
+      if (b.section_id) {
+        const s = db.prepare("SELECT id FROM sections WHERE id = ? AND user_id = ?").get(b.section_id, user.id);
+        if (!s) return send(res, 400, { error: "Unknown section" });
+        sets.push("section_id = ?"); vals.push(b.section_id);
+      } else { sets.push("section_id = ?"); vals.push(null); }
+    }
     if (typeof b.title === "string") { sets.push("title = ?"); vals.push(b.title); }
     if (!sets.length) return send(res, 400, { error: "Nothing to update" });
     vals.push(itemMatch[1], user.id);

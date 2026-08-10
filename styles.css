@@ -626,3 +626,66 @@ body {
 .nav-greet { font-size: 14px; color: var(--ink-2); font-weight: 550; white-space: nowrap; }
 .auth-area .btn-sm .ic svg { width: 15px; height: 15px; }
 @media (max-width: 560px) { .nav-greet { display: none; } }
+
+
+/* ============================================================
+   LIBRARY: time filter, pin/section controls, User Vault
+   ============================================================ */
+
+/* Sidebar group heading + custom section items */
+.nav-heading { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 20px 0 6px; padding: 0 12px; }
+.nav-subitem { padding-left: 22px; font-size: 14px; }
+.nav-subitem .ic svg { width: 15px; height: 15px; }
+.nav-sections { display: flex; flex-direction: column; gap: 3px; }
+
+/* Header layout */
+.main-head { flex-wrap: wrap; gap: 14px; }
+.main-head-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.main-head-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Segmented control (Latest / After one month) */
+.segmented { display: inline-flex; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg { border: none; background: transparent; font-family: inherit; font-size: 13px; font-weight: 550; color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; transition: color 0.18s var(--ease), background 0.18s var(--ease), box-shadow 0.18s var(--ease); white-space: nowrap; }
+.seg:hover { color: var(--ink-2); }
+.seg.active { color: var(--ink); background: var(--panel); box-shadow: var(--shadow-sm); }
+
+/* Per-item controls (pin + section) */
+.item-controls { display: flex; align-items: center; gap: 8px; padding: 0 14px 14px; }
+.pin-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); font-family: inherit; font-size: 12.5px; font-weight: 550; cursor: pointer; transition: color 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease); }
+.pin-btn svg { width: 14px; height: 14px; }
+.pin-btn:hover { color: var(--ink-2); }
+.pin-btn.pinned { color: var(--primary); background: var(--terra-soft); border-color: var(--active-line); }
+.sec-select { flex: 1; min-width: 0; appearance: none; -webkit-appearance: none; font-family: inherit; font-size: 12.5px; color: var(--ink-2); background: var(--panel-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a08e7b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center; border: 1px solid var(--line); padding: 7px 26px 7px 10px; border-radius: 9px; cursor: pointer; }
+.sec-select:focus { outline: none; border-color: var(--terra); }
+
+/* Vault */
+.vault { animation: rise 0.28s var(--ease); }
+.vault-note { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+
+/* Pinned grouped columns */
+.pin-groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
+.pin-col { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; }
+.pin-col-head { display: flex; align-items: center; gap: 9px; padding: 4px 4px 14px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.pin-col-head .ic { color: var(--terra); }
+.pin-col-head .ic svg { width: 18px; height: 18px; }
+.pin-col-head h3 { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0; flex: 1; }
+.pin-col-count { font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; min-width: 22px; text-align: center; }
+.pin-col-body { display: flex; flex-direction: column; gap: 14px; min-height: 60px; }
+
+/* Sections manager */
+.sections-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.section-card { position: relative; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px; cursor: pointer; transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease); }
+.section-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--line-2); }
+.section-card-ic { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; background: var(--terra-soft); color: var(--terra); margin-bottom: 14px; }
+.section-card-ic svg { width: 22px; height: 22px; }
+.section-card-name { font-family: var(--serif); font-size: 1.15rem; font-weight: 600; color: var(--ink); margin: 0 0 4px; word-break: break-word; }
+.section-card-count { color: var(--muted); font-size: 13px; margin: 0; }
+.section-card-del { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s var(--ease), color 0.15s var(--ease), background 0.15s var(--ease); }
+.section-card-del svg { width: 15px; height: 15px; }
+.section-card:hover .section-card-del { opacity: 1; }
+.section-card-del:hover { background: #f6e3dd; color: var(--primary); }
+.section-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 148px; border: 1.5px dashed var(--line-2); border-radius: var(--radius-lg); background: transparent; color: var(--muted); font-family: inherit; font-size: 14px; font-weight: 550; cursor: pointer; transition: border-color 0.18s var(--ease), color 0.18s var(--ease), background 0.18s var(--ease); }
+.section-add-card:hover { border-color: var(--terra); color: var(--ink-2); background: var(--panel); }
+.section-add-card svg { width: 22px; height: 22px; }
+
+@media (max-width: 900px) { .pin-groups { grid-template-columns: 1fr; } }

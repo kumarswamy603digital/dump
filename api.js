@@ -85,3 +85,10 @@ const Items = {
   // Authenticated file URL usable in <img src> / <a href>.
   fileUrl(item) { return item.fileUrl ? `${item.fileUrl}?token=${encodeURIComponent(getToken())}` : null; },
 };
+
+/* ---------------- sections (custom collections) ---------------- */
+const Sections = {
+  async list() { const d = await apiFetch("/api/sections"); return d.sections; },
+  async create(name) { const d = await apiFetch("/api/sections", { method: "POST", body: { name } }); return d.section; },
+  async remove(id) { await apiFetch(`/api/sections/${id}`, { method: "DELETE" }); },
+};
