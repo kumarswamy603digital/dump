@@ -107,6 +107,38 @@ async function moveStaged(id, section) {
   render();
   try { await Items.update(id, { section }); } catch (e) { toast(e.message); }
 }
+async function togglePin(id) {
+  const it = staged.find((s) => s.id === id); if (!it) return;
+  it.pinned = !it.pinned;
+  render();
+  toast(it.pinned ? "Pinned" : "Unpinned");
+  try { await Items.update(id, { pinned: it.pinned }); } catch (e) { toast(e.message); }
+}
+
+/* ---------------- Note modal ---------------- */
+let editingNoteId = null;
+const noteModal = $("#noteModal");
+const noteInput = $("#noteInput");
+const noteModalSub = $("#noteModalSub");
+function openNoteModal(id) {
+  const it = staged.find((s) => s.id === id); if (!it) return;
+  editingNoteId = id;
+  noteInput.value = it.annotation || "";
+  noteModalSub.textContent = `Note for “${it.title}”`;
+  noteModal.hidden = false;
+  setTimeout(() => noteInput.focus(), 40);
+}
+function closeNoteModal() { noteModal.hidden = true; editingNoteId = null; }
+async function saveNote(text) {
+  const id = editingNoteId;
+  const it = staged.find((s) => s.id === id);
+  closeNoteModal();
+  if (!it) return;
+  it.annotation = text;
+  render();
+  try { await Items.update(id, { annotation: text }); } catch (e) { toast(e.message); }
+  toast(text.trim() ? "Note saved" : "Note cleared");
+}
 async function approveAll() {
   if (!staged.length) return;
   const count = staged.length;
@@ -139,6 +171,18 @@ function sectionSelect(item) {
     ${SECTIONS.map((s) => `<option value="${s}" ${s === item.section ? "selected" : ""}>${SECTION_META[s].label}</option>`).join("")}
   </select>`;
 }
+function pinBtn(item) {
+  return `<button class="pin-btn ${item.pinned ? "pinned" : ""}" data-pin="${item.id}" title="${item.pinned ? "Unpin" : "Pin"}">${ICONS.pin}<span>${item.pinned ? "Pinned" : "Pin"}</span></button>`;
+}
+function noteBtn(item) {
+  const has = item.annotation && item.annotation.trim();
+  return `<button class="note-btn ${has ? "has-note" : ""}" data-note="${item.id}" title="${has ? "Edit your note" : "Add a note"}">${ICONS.notebook}<span>Note</span></button>`;
+}
+function noteSnippet(item) {
+  const t = (item.annotation || "").trim();
+  if (!t) return "";
+  return `<p class="item-note-snippet"><span class="ic">${ICONS.notebook}</span>${esc(t)}</p>`;
+}
 
 function dumpCardHtml(item) {
   const isNote = item.category === "note";
@@ -148,12 +192,16 @@ function dumpCardHtml(item) {
        <div class="dcard-info">
          <p class="dcard-title">${esc(item.title)}</p>
          <p class="dcard-sub">${esc(item.subtitle || item.url || "")}</p>
+         ${noteSnippet(item)}
        </div>`;
   const openable = (item.hasFile || item.url) ? "is-openable" : "";
   return `<article class="dcard ${openable}" data-id="${item.id}">
     <div class="dcard-top"><button class="dcard-del" data-del="${item.id}" title="Discard">${ICONS.x}</button></div>
     ${body}
-    <div class="dcard-foot">${sectionSelect(item)}</div>
+    <div class="dcard-foot">
+      <div class="dcard-controls">${pinBtn(item)}${noteBtn(item)}</div>
+      ${sectionSelect(item)}
+    </div>
   </article>`;
 }
 
@@ -210,9 +258,18 @@ fileInput.addEventListener("change", () => { dumpFiles(fileInput.files); fileInp
 if (folderInput) folderInput.addEventListener("change", () => { dumpFiles(folderInput.files); folderInput.value = ""; });
 approveBtn.addEventListener("click", approveAll);
 
+// Note modal
+$("#noteModalClose").addEventListener("click", closeNoteModal);
+$("#noteSave").addEventListener("click", () => saveNote(noteInput.value));
+$("#noteClear").addEventListener("click", () => saveNote(""));
+noteModal.addEventListener("click", (e) => { if (e.target === noteModal) closeNoteModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !noteModal.hidden) closeNoteModal(); });
+
 $("#sections").addEventListener("click", (e) => {
   const del = e.target.closest("[data-del]");
   if (del) { removeStaged(del.getAttribute("data-del")); return; }
+  const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
+  const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
   const card = e.target.closest(".dcard.is-openable");
   if (card && !e.target.closest("button, select")) {
     const it = staged.find((s) => s.id === card.dataset.id);

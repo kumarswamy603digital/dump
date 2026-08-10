@@ -93,6 +93,22 @@
     </section>
   </main>
 
+  <!-- Note modal -->
+  <div class="modal-overlay" id="noteModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+      <div class="modal-head">
+        <h3 id="noteModalTitle">Your note</h3>
+        <button class="icon-btn" id="noteModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="noteModalSub">Jot down anything about this item.</p>
+      <textarea id="noteInput" class="modal-input note-textarea" rows="5" placeholder="Type your note…"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="noteClear">Clear note</button>
+        <button class="btn btn-primary" id="noteSave">Save note</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Full-page drop overlay -->
   <div class="drop-overlay" id="dropOverlay">
     <div class="drop-overlay-inner">

@@ -840,3 +840,9 @@ body {
 .item-thumb .star-btn { z-index: 3; }
 .item-thumb .type-tag { z-index: 2; }
 .dcard-thumb { position: relative; }
+
+
+/* Dump staging card — pin + note controls */
+.dcard-controls { display: flex; gap: 6px; margin-bottom: 8px; }
+.dcard-controls > button { flex: 1; }
+.dcard-controls .pin-btn, .dcard-controls .note-btn { justify-content: center; padding: 7px 8px; font-size: 12px; }
