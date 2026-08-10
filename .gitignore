@@ -1,5 +1,6 @@
 # Backend data & secrets
 server/data/
+.env
 node_modules/
 *.log
 .DS_Store

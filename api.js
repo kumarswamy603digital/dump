@@ -86,7 +86,9 @@ const Items = {
   },
   async create(item) {
     const d = await apiFetch("/api/items", { method: "POST", body: item });
-    return d.item;
+    const it = d.item;
+    it.ocrUrls = d.ocrUrls || [];   // links the server found inside a screenshot
+    return it;
   },
   async update(id, patch) {
     const d = await apiFetch(`/api/items/${id}`, { method: "PATCH", body: patch });

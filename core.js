@@ -1,6 +1,6 @@
 /* ============================================================
    Dump — shared core
-   Detection engine · IndexedDB storage · icons · Groq AI
+   Detection engine · sections · icons · helpers
    Loaded by every page before its page-specific script.
    ============================================================ */
 
@@ -125,75 +125,9 @@ function bucketOf(cat) {
   return "links";
 }
 
-/* ---------------- Groq AI classifier ----------------
-   Optional: refines classification into one of the four sections.
-   Falls back silently to the rule-based sectionOf() when no key
-   is set or the request fails.                                        */
-
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_KEY_LS = "dump-groq-key";
-const GROQ_TEXT_MODEL = "openai/gpt-oss-20b";
-const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-
-function getGroqKey() { try { return localStorage.getItem(GROQ_KEY_LS) || ""; } catch { return ""; } }
-function setGroqKey(k) { try { k ? localStorage.setItem(GROQ_KEY_LS, k.trim()) : localStorage.removeItem(GROQ_KEY_LS); } catch {} }
-function hasGroq() { return !!getGroqKey(); }
-
-const GROQ_SYSTEM =
-  "You are a strict classifier. Put the item into exactly ONE of these four categories: " +
-  "reels (short videos/reels — Instagram reels, TikTok, YouTube shorts, any video), " +
-  "pdfs (PDFs and documents), " +
-  "links (general web links, articles, notes, plain text), " +
-  "screenshots (images, screenshots, photos). " +
-  "Answer with ONLY the single category word: reels, pdfs, links, or screenshots.";
-
-function normalizeSection(text) {
-  const t = (text || "").toLowerCase();
-  if (t.includes("reel") || t.includes("video")) return "reels";
-  if (t.includes("pdf") || t.includes("doc")) return "pdfs";
-  if (t.includes("screenshot") || t.includes("image") || t.includes("photo")) return "screenshots";
-  if (t.includes("link") || t.includes("note") || t.includes("article")) return "links";
-  return null;
-}
-
-async function groqCall(model, messages) {
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getGroqKey()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages, temperature: 0, max_tokens: 12 }),
-  });
-  if (!res.ok) throw new Error("Groq HTTP " + res.status);
-  const data = await res.json();
-  return normalizeSection(data.choices?.[0]?.message?.content || "");
-}
-
-/**
- * Classify an item with Groq. Returns a section string, or null when
- * AI is unavailable / fails (caller should keep the rule-based section).
- */
-async function aiClassify(item) {
-  if (!hasGroq()) return null;
-  try {
-    if (item.kind === "file" && (item.mime || "").startsWith("image/") && item.blob) {
-      const dataUrl = await blobToDataURL(item.blob);
-      return await groqCall(GROQ_VISION_MODEL, [
-        { role: "system", content: GROQ_SYSTEM },
-        { role: "user", content: [
-          { type: "text", text: "Classify this image into reels, pdfs, links, or screenshots." },
-          { type: "image_url", image_url: { url: dataUrl } },
-        ] },
-      ]);
-    }
-    const content = item.url || item.note || item.title || "";
-    return await groqCall(GROQ_TEXT_MODEL, [
-      { role: "system", content: GROQ_SYSTEM },
-      { role: "user", content: `Classify this item: ${content}` },
-    ]);
-  } catch (e) {
-    console.warn("Groq classification failed:", e.message);
-    return null;
-  }
-}
+/* ---------------- File helper ----------------
+   AI classification + screenshot OCR now run server-side (see server.js),
+   configured with keys in the backend .env — no client key needed.        */
 
 function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {

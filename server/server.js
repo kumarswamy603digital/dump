@@ -19,6 +19,21 @@ const MAX_BODY = 20 * 1024 * 1024;                 // 20 MB (files as base64)
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+/* ---------------- .env loader (dependency-free) ---------------- */
+(function loadEnv() {
+  for (const f of [path.join(ROOT, ".env"), path.join(__dirname, ".env")]) {
+    let txt;
+    try { txt = fs.readFileSync(f, "utf8"); } catch { continue; }
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (!m || line.trim().startsWith("#")) continue;
+      let v = m[2].trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+    }
+  }
+})();
+
 /* ---------------- Secret (persisted) ---------------- */
 const SECRET = (() => {
   if (process.env.DUMP_JWT_SECRET) return process.env.DUMP_JWT_SECRET;
@@ -169,6 +184,109 @@ async function fetchRemotePdf(url) {
     return { buf: Buffer.from(ab), name };
   } catch { return null; }
   finally { clearTimeout(timer); }
+}
+
+/* ---------------- AI (Groq) + OCR — server-side ---------------- */
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_TEXT_MODEL = process.env.GROQ_TEXT_MODEL || "openai/gpt-oss-120b";
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-maverick-17b-128e-instruct";
+const OCR_API_KEY = process.env.OCR_API_KEY || "";
+const OCR_URL = process.env.OCR_URL || "https://api.ocr.space/parse/image";
+
+async function withTimeout(factory, ms) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  try { return await factory(c.signal); } finally { clearTimeout(t); }
+}
+
+async function groqChat(model, messages, maxTokens = 16) {
+  if (!GROQ_API_KEY) return "";
+  const r = await withTimeout((signal) => fetch(GROQ_URL, {
+    method: "POST", signal,
+    headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, messages, temperature: 0, max_tokens: maxTokens }),
+  }), 12000);
+  if (!r.ok) throw new Error("Groq HTTP " + r.status);
+  const data = await r.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
+function normalizeSection(text) {
+  const t = (text || "").toLowerCase();
+  if (t.includes("reel") || t.includes("video")) return "reels";
+  if (t.includes("pdf") || t.includes("doc")) return "pdfs";
+  if (t.includes("screenshot") || t.includes("image") || t.includes("photo")) return "screenshots";
+  if (t.includes("link") || t.includes("note") || t.includes("article")) return "links";
+  return null;
+}
+const CLASSIFY_SYSTEM =
+  "You are a strict classifier. Reply with ONLY one word — reels, pdfs, links, or screenshots. " +
+  "reels = short videos/reels (Instagram, TikTok, YouTube). pdfs = PDFs/documents. " +
+  "links = general web links, articles, notes. screenshots = images/photos.";
+
+async function classifyText({ url, title, note }) {
+  if (!GROQ_API_KEY) return null;
+  try {
+    const content = url || note || title || "";
+    if (!content) return null;
+    return normalizeSection(await groqChat(GROQ_TEXT_MODEL, [
+      { role: "system", content: CLASSIFY_SYSTEM },
+      { role: "user", content: `Classify this item: ${content}` },
+    ], 8));
+  } catch (e) { console.warn("classifyText failed:", e.message); return null; }
+}
+
+async function ocrViaOcrSpace(buf, mime) {
+  const body = new URLSearchParams();
+  body.set("base64Image", `data:${mime || "image/png"};base64,${buf.toString("base64")}`);
+  body.set("language", "eng");
+  body.set("OCREngine", "2");
+  body.set("scale", "true");
+  const r = await withTimeout((signal) => fetch(OCR_URL, {
+    method: "POST", signal,
+    headers: { apikey: OCR_API_KEY, "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  }), 15000);
+  if (!r.ok) throw new Error("OCR HTTP " + r.status);
+  const data = await r.json();
+  if (data.IsErroredOnProcessing) return "";
+  return (data.ParsedResults || []).map((p) => p.ParsedText || "").join("\n");
+}
+
+async function ocrViaGroqVision(buf, mime) {
+  const dataUrl = `data:${mime || "image/png"};base64,${buf.toString("base64")}`;
+  return await groqChat(GROQ_VISION_MODEL, [
+    { role: "user", content: [
+      { type: "text", text: "Extract ALL text visible in this image, especially any URLs or links. Return only the raw extracted text, nothing else." },
+      { type: "image_url", image_url: { url: dataUrl } },
+    ] },
+  ], 512);
+}
+
+async function ocrImageBuffer(buf, mime) {
+  if (OCR_API_KEY) { try { return await ocrViaOcrSpace(buf, mime); } catch (e) { console.warn("OCR.space failed:", e.message); } }
+  if (GROQ_API_KEY) { try { return await ocrViaGroqVision(buf, mime); } catch (e) { console.warn("Groq OCR failed:", e.message); } }
+  return "";
+}
+
+const COMMON_TLDS = new Set("com,org,net,io,co,ai,dev,app,me,gov,edu,in,uk,us,ca,au,de,fr,jp,so,site,xyz,tech,info,news,tv".split(","));
+function extractUrls(text) {
+  if (!text) return [];
+  const re = /((https?:\/\/)?(www\.)?[a-z0-9][a-z0-9-]*(\.[a-z0-9-]+)+(\/[^\s"'<>)\]]*)?)/gi;
+  const out = new Set();
+  for (const m of text.matchAll(re)) {
+    let u = m[0].trim().replace(/[.,);\]]+$/, "");
+    const hasProto = /^https?:\/\//i.test(u);
+    const hasWww = /^www\./i.test(u);
+    const hasPath = u.includes("/");
+    const tld = (u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0].split(".").pop() || "").toLowerCase();
+    if (!hasProto && !hasWww && !hasPath && !COMMON_TLDS.has(tld)) continue;
+    if (!hasProto) u = "https://" + u;
+    out.add(u);
+    if (out.size >= 10) break;
+  }
+  return [...out];
 }
 
 function rowToItem(r) {
@@ -372,16 +490,32 @@ async function handleApi(req, res, url) {
       const pdf = await fetchRemotePdf(b.url);
       if (pdf) { fileBuf = pdf.buf; mime = "application/pdf"; fileName = pdf.name; }
     }
+
+    const isImage = (mime || "").startsWith("image/");
+
+    // Server-side AI classification for text/link items (strong Groq model).
+    let section = b.section || null;
+    if (!isImage && (b.url || b.note || b.title)) {
+      const c = await classifyText({ url: b.url, title: b.title, note: b.note });
+      if (c) section = c;
+    }
+
     db.prepare(`INSERT INTO items
       (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      id, user.id, b.kind || null, b.category || null, b.section || null,
+      id, user.id, b.kind || null, b.category || null, section,
       b.title || null, b.subtitle || null, b.url || null, b.note || null,
       b.thumbnail || null, mime, fileName, fileBuf,
       b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, Date.now()
     );
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
-    return send(res, 201, { item: rowToItem(row) });
+
+    // OCR screenshots: extract any links found inside the image.
+    let ocrUrls = [];
+    if (isImage && fileBuf) {
+      try { ocrUrls = extractUrls(await ocrImageBuffer(fileBuf, mime)); } catch {}
+    }
+    return send(res, 201, { item: rowToItem(row), ocrUrls });
   }
 
   const itemMatch = p.match(/^\/api\/items\/([\w-]+)$/);

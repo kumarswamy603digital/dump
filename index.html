@@ -19,10 +19,6 @@
       <span class="brand-name">Dump</span>
     </a>
     <div class="lp-nav-actions">
-      <button class="ai-chip" id="aiChip" title="Connect Groq AI">
-        <span class="ic" data-icon="sparkles"></span>
-        <span id="aiChipLabel">AI: rule-based</span>
-      </button>
       <div class="auth-area" id="authArea"></div>
     </div>
   </header>
@@ -33,27 +29,32 @@
       <span class="lp-pill"><span class="lp-dot"></span> Your private dump</span>
       <h1 class="lp-title">Dump it <em>here.</em></h1>
       <p class="lp-sub">
-        Drop links, reels, PDFs and screenshots. The AI reads each one and files it
-        into the right shelf below. Review, then send it all to your library.
+        Paste a link, a note, or a screenshot — we even read the links inside your
+        screenshots — and everything is sorted into the right shelf below.
       </p>
 
-      <div class="dropzone" id="dropzone" tabindex="0">
-        <div class="dropzone-inner">
-          <span class="ic dropzone-icon" data-icon="upload"></span>
-          <p class="dropzone-title">Drag &amp; drop anything here</p>
-          <p class="dropzone-hint">reels · links · PDFs · screenshots · photos</p>
-          <label class="file-pick">
-            <input type="file" id="fileInput" multiple hidden
-                   accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
-            <span class="btn btn-outline">Browse files</span>
-          </label>
-        </div>
+      <!-- Primary action: paste a link -->
+      <div class="paste-primary">
+        <span class="ic paste-primary-ic" data-icon="link"></span>
+        <input type="text" id="linkInput" class="link-input link-input-lg"
+               placeholder="Paste a link or note, or press ⌘/Ctrl+V to paste a screenshot…" autocomplete="off" />
+        <button class="btn btn-primary btn-lg" id="addLinkBtn">Dump it</button>
       </div>
 
-      <div class="paste-row">
-        <input type="text" id="linkInput" class="link-input"
-               placeholder="Paste a link or note and press Enter — Instagram, YouTube, docs, PDFs…" autocomplete="off" />
-        <button class="btn btn-primary" id="addLinkBtn">Dump it</button>
+      <!-- Secondary action: browse files / folder -->
+      <div class="secondary-row">
+        <label class="file-pick">
+          <input type="file" id="fileInput" multiple hidden
+                 accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+          <span class="linklike"><span class="ic" data-icon="upload"></span> Browse files</span>
+        </label>
+        <span class="dot-sep">·</span>
+        <label class="file-pick">
+          <input type="file" id="folderInput" webkitdirectory directory multiple hidden />
+          <span class="linklike"><span class="ic" data-icon="folder"></span> Browse a folder</span>
+        </label>
+        <span class="dot-sep">·</span>
+        <span class="muted-hint">or drag &amp; drop anywhere</span>
       </div>
     </section>
 
@@ -91,29 +92,6 @@
       </div>
     </section>
   </main>
-
-  <!-- AI settings modal -->
-  <div class="modal-overlay" id="aiModal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
-      <div class="modal-head">
-        <h3 id="aiModalTitle">Connect Groq AI</h3>
-        <button class="icon-btn" id="aiModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
-      </div>
-      <p class="modal-sub">
-        Paste your Groq API key to let AI classify what you dump. Without it, Dump still
-        sorts everything using fast built-in rules. Your key is stored only in this browser.
-      </p>
-      <input type="password" id="groqKeyInput" class="modal-input" placeholder="gsk_… your Groq API key" autocomplete="off" />
-      <p class="modal-fineprint">
-        Get a free key at <span class="link-accent">console.groq.com/keys</span>.
-        For production, proxy requests through your own backend to keep the key secret.
-      </p>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" id="groqRemove">Remove key</button>
-        <button class="btn btn-primary" id="groqSave">Save key</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Full-page drop overlay -->
   <div class="drop-overlay" id="dropOverlay">

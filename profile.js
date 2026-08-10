@@ -41,13 +41,6 @@ async function loadStats() {
   } catch (e) { /* stats are best-effort */ }
 }
 
-/* ---------------- AI key ---------------- */
-function updateAiMsg() {
-  const el = $("#aiMsg");
-  el.textContent = hasGroq() ? "AI is connected — new dumps are sorted by Groq." : "Using built-in rules (no AI key connected).";
-  el.classList.add("show");
-}
-
 /* ---------------- Boot & wiring ---------------- */
 (async function init() {
   if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }
@@ -61,12 +54,6 @@ function updateAiMsg() {
   else if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }
 
   loadStats();
-
-  // AI key
-  $("#groqKey").value = getGroqKey();
-  updateAiMsg();
-  $("#groqSave").addEventListener("click", () => { setGroqKey($("#groqKey").value); updateAiMsg(); toast(hasGroq() ? "Groq AI connected" : "Key cleared"); });
-  $("#groqRemove").addEventListener("click", () => { setGroqKey(""); $("#groqKey").value = ""; updateAiMsg(); toast("Key removed"); });
 
   // Save profile
   $("#saveProfile").addEventListener("click", async () => {

@@ -1,20 +1,21 @@
 /* ============================================================
    Dump — page 1 (staging), backed by the API
-   Dump -> classify into 4 sections -> approve -> library
+   Paste / drop / screenshot -> server classifies + OCRs ->
+   review the 4 shelves -> approve -> library.
    Requires core.js + api.js
    ============================================================ */
 
-let staged = []; // items with approved === false (server-backed)
+let staged = [];   // items with approved === false (server-backed)
+let busy = 0;      // in-flight server operations (classify/OCR)
 
 const $ = (s) => document.querySelector(s);
 const fileInput = $("#fileInput");
+const folderInput = $("#folderInput");
 const linkInput = $("#linkInput");
-const dropzone = $("#dropzone");
 const dropOverlay = $("#dropOverlay");
 const stagingStatus = $("#stagingStatus");
 const approveBtn = $("#approveBtn");
 const approveCount = $("#approveCount");
-let pendingAI = 0;
 
 /* ---------------- Auth gate ---------------- */
 function requireLogin() {
@@ -30,10 +31,10 @@ async function dumpText(raw) {
   if (!requireLogin()) return;
   const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return;
-  const fresh = [];
-  for (const part of parts) {
-    const info = detectLink(part);
-    try {
+  busy++; updateStatus();
+  try {
+    for (const part of parts) {
+      const info = detectLink(part);
       const item = await Items.create({
         kind: info.url ? "link" : "note",
         category: info.category,
@@ -45,23 +46,22 @@ async function dumpText(raw) {
         thumbnail: info.thumbnail || null,
         approved: false,
       });
-      item.aiState = hasGroq() ? "pending" : "rule";
       staged.unshift(item);
-      fresh.push(item);
-    } catch (e) { toast(e.message); return; }
-  }
-  render();
-  classifyBatch(fresh);
+      render();
+    }
+  } catch (e) { toast(e.message); }
+  finally { busy = Math.max(0, busy - 1); render(); }
 }
 
 async function dumpFiles(fileList) {
   if (!requireLogin()) return;
   const files = Array.from(fileList);
   if (!files.length) return;
-  const fresh = [];
-  for (const file of files) {
-    const info = detectFile(file);
-    try {
+  busy++; updateStatus();
+  const foundUrls = [];
+  try {
+    for (const file of files) {
+      const info = detectFile(file);
       const payload = await Items.fileToPayload(file, {
         kind: "file",
         category: info.category,
@@ -71,38 +71,26 @@ async function dumpFiles(fileList) {
         approved: false,
       });
       const item = await Items.create(payload);
-      item.blob = file; // keep in memory for AI vision classification
-      item.aiState = hasGroq() && (file.type || "").startsWith("image/") ? "pending" : "rule";
       staged.unshift(item);
-      fresh.push(item);
-    } catch (e) { toast(e.message); return; }
-  }
-  render();
-  classifyBatch(fresh);
-}
-
-/* ---------------- AI classification pass ---------------- */
-
-async function classifyBatch(list) {
-  if (!hasGroq()) return;
-  const targets = list.filter((it) => it.aiState === "pending");
-  if (!targets.length) return;
-  pendingAI += targets.length;
-  updateStatus();
-  for (const item of targets) {
-    const section = await aiClassify(item);
-    const live = staged.find((s) => s.id === item.id);
-    if (live) {
-      if (section && SECTIONS.includes(section) && section !== live.section) {
-        live.section = section;
-        try { await Items.update(live.id, { section }); } catch {}
-      }
-      live.aiState = section ? "done" : "rule";
+      render();
+      if (item.ocrUrls && item.ocrUrls.length) foundUrls.push(...item.ocrUrls);
     }
-    pendingAI = Math.max(0, pendingAI - 1);
-    render();
-  }
-  updateStatus();
+    // Screenshots: turn any links the AI read out of the image into their own items.
+    const known = new Set(staged.map((s) => s.url).filter(Boolean));
+    const fresh = [...new Set(foundUrls)].filter((u) => !known.has(u));
+    for (const url of fresh) {
+      const info = detectLink(url);
+      const link = await Items.create({
+        kind: "link", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
+        thumbnail: info.thumbnail || null, approved: false,
+      });
+      staged.unshift(link);
+      render();
+    }
+    if (fresh.length) toast(`Found ${fresh.length} link${fresh.length === 1 ? "" : "s"} in your screenshot`);
+  } catch (e) { toast(e.message); }
+  finally { busy = Math.max(0, busy - 1); render(); }
 }
 
 /* ---------------- Mutations ---------------- */
@@ -112,22 +100,19 @@ async function removeStaged(id) {
   staged = staged.filter((s) => s.id !== id);
   render();
 }
-
 async function moveStaged(id, section) {
   const it = staged.find((s) => s.id === id);
   if (!it || !SECTIONS.includes(section)) return;
-  it.section = section; it.aiState = "manual";
+  it.section = section;
   render();
   try { await Items.update(id, { section }); } catch (e) { toast(e.message); }
 }
-
 async function approveAll() {
   if (!staged.length) return;
   const count = staged.length;
   approveBtn.disabled = true;
-  try {
-    for (const it of staged) await Items.update(it.id, { approved: true });
-  } catch (e) { approveBtn.disabled = false; return toast(e.message); }
+  try { for (const it of staged) await Items.update(it.id, { approved: true }); }
+  catch (e) { approveBtn.disabled = false; return toast(e.message); }
   staged = [];
   render();
   toast(`${count} item${count === 1 ? "" : "s"} sent to your library`);
@@ -139,7 +124,7 @@ function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
   if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
-    if (src) return `<div class="dcard-thumb"><img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
+    if (src) return `<div class="dcard-thumb"><img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" onerror="this.closest('.dcard-thumb').classList.add('tinted');this.replaceWith(Object.assign(document.createElement('span'),{className:'thumb-ic ic',innerHTML:ICONS.image}))" /></div>`;
   }
   if (item.category === "doc" && item.hasFile) {
     return `<div class="dcard-thumb pdf"><iframe class="pdf-frame" src="${esc(Items.fileUrl(item))}#toolbar=0&navpanes=0&view=FitH" title="PDF preview"></iframe></div>`;
@@ -148,13 +133,6 @@ function thumbFor(item) {
     return `<div class="dcard-thumb"><img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}" onerror="this.remove()" /></div>`;
   }
   return `<div class="dcard-thumb tinted"><span class="thumb-ic ic">${ICONS[meta.icon]}</span></div>`;
-}
-
-function aiBadge(item) {
-  if (item.aiState === "pending") return `<span class="ai-badge working"><span class="ic">${ICONS.sparkles}</span> AI…</span>`;
-  if (item.aiState === "done") return `<span class="ai-badge done"><span class="ic">${ICONS.sparkles}</span> AI</span>`;
-  if (item.aiState === "manual") return `<span class="ai-badge">edited</span>`;
-  return "";
 }
 
 function sectionSelect(item) {
@@ -173,7 +151,7 @@ function dumpCardHtml(item) {
          <p class="dcard-sub">${esc(item.subtitle || item.url || "")}</p>
        </div>`;
   return `<article class="dcard" data-id="${item.id}">
-    <div class="dcard-top">${aiBadge(item)}<button class="dcard-del" data-del="${item.id}" title="Discard">${ICONS.x}</button></div>
+    <div class="dcard-top"><button class="dcard-del" data-del="${item.id}" title="Discard">${ICONS.x}</button></div>
     ${body}
     <div class="dcard-foot">${sectionSelect(item)}</div>
   </article>`;
@@ -189,35 +167,19 @@ function render() {
   });
   document.querySelectorAll("[data-scount]").forEach((el) => { el.textContent = counts[el.dataset.scount]; });
   approveCount.textContent = staged.length;
-  approveBtn.disabled = staged.length === 0;
+  approveBtn.disabled = staged.length === 0 || busy > 0;
   updateStatus();
 }
 
 function updateStatus() {
-  if (!Auth.isLoggedIn()) { stagingStatus.innerHTML = 'Sign in to start dumping — <a class="link-accent" href="signin.html">sign in</a> or <a class="link-accent" href="signup.html">create an account</a>.'; return; }
-  if (!staged.length) { stagingStatus.textContent = "Nothing dumped yet — drop something above."; return; }
-  if (pendingAI > 0) {
-    stagingStatus.innerHTML = `<span class="dot-pulse"></span> AI is sorting ${pendingAI} item${pendingAI === 1 ? "" : "s"}…`;
-  } else {
-    const how = hasGroq() ? "Sorted by AI" : "Sorted by built-in rules";
-    stagingStatus.textContent = `${how} into ${SECTIONS.length} shelves · review and approve to send to your library.`;
+  if (!Auth.isLoggedIn()) {
+    stagingStatus.innerHTML = 'Sign in to start dumping — <a class="link-accent" href="signin.html">sign in</a> or <a class="link-accent" href="signup.html">create an account</a>.';
+    return;
   }
+  if (busy > 0) { stagingStatus.innerHTML = `<span class="dot-pulse"></span> AI is reading &amp; sorting…`; return; }
+  if (!staged.length) { stagingStatus.textContent = "Nothing dumped yet — paste a link or screenshot above."; return; }
+  stagingStatus.textContent = `Sorted into ${SECTIONS.length} shelves · review and approve to send to your library.`;
 }
-
-/* ---------------- AI settings modal ---------------- */
-
-const aiModal = $("#aiModal");
-const aiChip = $("#aiChip");
-const aiChipLabel = $("#aiChipLabel");
-const groqKeyInput = $("#groqKeyInput");
-
-function refreshAiChip() {
-  const on = hasGroq();
-  aiChip.classList.toggle("on", on);
-  aiChipLabel.textContent = on ? "AI: connected" : "AI: rule-based";
-}
-function openAiModal() { groqKeyInput.value = getGroqKey(); aiModal.hidden = false; setTimeout(() => groqKeyInput.focus(), 40); }
-function closeAiModal() { aiModal.hidden = true; }
 
 /* ---------------- Auth link in nav ---------------- */
 function setupAuthLink() {
@@ -244,8 +206,7 @@ function setupAuthLink() {
 $("#addLinkBtn").addEventListener("click", () => { if (linkInput.value.trim()) { dumpText(linkInput.value); linkInput.value = ""; } });
 linkInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && linkInput.value.trim()) { dumpText(linkInput.value); linkInput.value = ""; } });
 fileInput.addEventListener("change", () => { dumpFiles(fileInput.files); fileInput.value = ""; });
-dropzone.addEventListener("click", (e) => { if (!e.target.closest(".file-pick")) { if (requireLogin()) fileInput.click(); } });
-dropzone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (requireLogin()) fileInput.click(); } });
+if (folderInput) folderInput.addEventListener("change", () => { dumpFiles(folderInput.files); folderInput.value = ""; });
 approveBtn.addEventListener("click", approveAll);
 
 $("#sections").addEventListener("click", (e) => {
@@ -257,17 +218,13 @@ $("#sections").addEventListener("change", (e) => {
   if (mv) moveStaged(mv.getAttribute("data-move"), mv.value);
 });
 
-aiChip.addEventListener("click", openAiModal);
-$("#aiModalClose").addEventListener("click", closeAiModal);
-aiModal.addEventListener("click", (e) => { if (e.target === aiModal) closeAiModal(); });
-$("#groqSave").addEventListener("click", () => {
-  setGroqKey(groqKeyInput.value); refreshAiChip(); closeAiModal();
-  toast(hasGroq() ? "Groq AI connected" : "Key cleared");
-  const rulebased = staged.filter((s) => s.aiState === "rule");
-  if (hasGroq() && rulebased.length) { rulebased.forEach((s) => (s.aiState = "pending")); render(); classifyBatch(rulebased); }
+// Paste a screenshot straight from the clipboard (Ctrl/⌘+V).
+window.addEventListener("paste", (e) => {
+  const imgs = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith("image/"));
+  if (imgs.length) { e.preventDefault(); dumpFiles(imgs); }
 });
-$("#groqRemove").addEventListener("click", () => { setGroqKey(""); groqKeyInput.value = ""; refreshAiChip(); toast("Key removed"); });
 
+// Global drag & drop (anywhere on the page).
 let dragDepth = 0;
 window.addEventListener("dragenter", (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); dragDepth++; dropOverlay.classList.add("show"); } });
 window.addEventListener("dragover", (e) => { if (dropOverlay.classList.contains("show")) e.preventDefault(); });
@@ -279,21 +236,16 @@ window.addEventListener("drop", (e) => {
   const text = dt.getData("text/uri-list") || dt.getData("text/plain");
   if (text) dumpText(text);
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !aiModal.hidden) closeAiModal(); });
 
 /* ---------------- Boot ---------------- */
 
 (async function init() {
   injectIcons();
-  refreshAiChip();
   setupAuthLink();
   if (Auth.isLoggedIn()) {
     try { staged = await Items.list({ approved: false }); }
-    catch (e) {
-      staged = [];
-      // Only flip to the logged-out view if the token was actually invalid (401 cleared it).
-      if (!Auth.isLoggedIn()) setupAuthLink(); else toast(e.message);
-    }
+    catch (e) { staged = []; if (!Auth.isLoggedIn()) setupAuthLink(); else toast(e.message); }
+    if (linkInput) linkInput.focus();
   }
   render();
 })();
