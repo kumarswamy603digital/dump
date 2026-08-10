@@ -239,11 +239,15 @@ async function classifyText({ url, title, note }) {
 }
 
 async function ocrViaOcrSpace(buf, mime) {
+  // OCR.space free tier caps uploads at ~1 MB; warn but still try.
+  if (buf.length > 1024 * 1024) console.warn(`OCR.space: image is ${(buf.length / 1048576).toFixed(1)} MB (free tier limit ~1 MB).`);
   const body = new URLSearchParams();
   body.set("base64Image", `data:${mime || "image/png"};base64,${buf.toString("base64")}`);
   body.set("language", "eng");
   body.set("OCREngine", "2");
   body.set("scale", "true");
+  body.set("isOverlayRequired", "false");
+  body.set("detectOrientation", "true");
   const r = await withTimeout((signal) => fetch(OCR_URL, {
     method: "POST", signal,
     headers: { apikey: OCR_API_KEY, "Content-Type": "application/x-www-form-urlencoded" },
@@ -251,8 +255,13 @@ async function ocrViaOcrSpace(buf, mime) {
   }), 15000);
   if (!r.ok) throw new Error("OCR HTTP " + r.status);
   const data = await r.json();
-  if (data.IsErroredOnProcessing) return "";
-  return (data.ParsedResults || []).map((p) => p.ParsedText || "").join("\n");
+  if (data.IsErroredOnProcessing) {
+    const msg = Array.isArray(data.ErrorMessage) ? data.ErrorMessage.join("; ") : (data.ErrorMessage || "unknown error");
+    throw new Error("OCR.space: " + msg);
+  }
+  const text = (data.ParsedResults || []).map((p) => p.ParsedText || "").join("\n").trim();
+  console.log(`OCR.space read ${text.length} chars from screenshot.`);
+  return text;
 }
 
 async function ocrViaGroqVision(buf, mime) {
@@ -308,6 +317,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function handleApi(req, res, url) {
   const p = url.pathname;
   const method = req.method;
+
+  // --- Public capability flags (no secrets) — confirm what's wired ---
+  if (p === "/api/config" && method === "GET") {
+    return send(res, 200, {
+      aiClassify: !!GROQ_API_KEY,
+      ocr: OCR_API_KEY ? "ocr.space" : (GROQ_API_KEY ? "groq-vision" : "off"),
+    });
+  }
 
   // --- Auth ---
   if (p === "/api/auth/signup" && method === "POST") {
@@ -592,4 +609,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`Dump server running at http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Dump server running at http://localhost:${PORT}`);
+  console.log(`  AI classification: ${GROQ_API_KEY ? "Groq (" + GROQ_TEXT_MODEL + ")" : "rule-based (no GROQ_API_KEY)"}`);
+  console.log(`  Screenshot OCR:    ${OCR_API_KEY ? "OCR.space (key detected)" : (GROQ_API_KEY ? "Groq vision fallback" : "disabled (set OCR_API_KEY)")}`);
+});
