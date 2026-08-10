@@ -125,57 +125,6 @@ function bucketOf(cat) {
   return "links";
 }
 
-/* ---------------- Storage (IndexedDB) ----------------
-   Items carry `approved` (false = staged on page 1, true = in library)
-   and `section` (one of SECTIONS).                                    */
-
-const DB_NAME = "dump-db";
-const STORE = "items";
-let _db = null;
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    if (_db) return resolve(_db);
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt");
-        store.createIndex("category", "category");
-      }
-    };
-    req.onsuccess = () => { _db = req.result; resolve(_db); };
-    req.onerror = () => reject(req.error);
-  });
-}
-async function dbAll() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function dbPut(item) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(item);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function dbDelete(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
 /* ---------------- Groq AI classifier ----------------
    Optional: refines classification into one of the four sections.
    Falls back silently to the rule-based sectionOf() when no key
@@ -318,15 +267,6 @@ function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 function isToday(ts) {
   const d = new Date(ts), n = new Date();
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
-}
-
-// Object URLs for stored file blobs (shared cache)
-const objectUrls = new Map();
-function urlForBlob(item) {
-  if (objectUrls.has(item.id)) return objectUrls.get(item.id);
-  const url = URL.createObjectURL(item.blob);
-  objectUrls.set(item.id, url);
-  return url;
 }
 
 let _toastTimer;

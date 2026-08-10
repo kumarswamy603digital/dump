@@ -1,7 +1,7 @@
 /* ============================================================
-   Dump — page 2 (library)
-   Shows approved items in a calm, sortable workspace.
-   Requires core.js
+   Dump — page 2 (library), backed by the API
+   Shows approved items. Requires sign-in.
+   Requires core.js + api.js
    ============================================================ */
 
 let items = [];
@@ -23,7 +23,7 @@ const nav = $("#nav");
 const modalOverlay = $("#modalOverlay");
 const dropOverlay = $("#dropOverlay");
 
-/* ---------------- Adding (direct to library, pre-approved) ---------------- */
+/* ---------------- Adding (direct to library, approved) ---------------- */
 
 async function addFromText(raw) {
   const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
@@ -31,14 +31,15 @@ async function addFromText(raw) {
   let added = 0, lastCat = null;
   for (const part of parts) {
     const info = detectLink(part);
-    const item = {
-      id: uid(), createdAt: Date.now() + added, kind: info.url ? "link" : "note",
-      category: info.category, title: info.title, subtitle: info.subtitle || info.domain || "",
-      url: info.url, thumbnail: info.thumbnail || null,
-      note: info.category === "note" ? info.title : null,
-      section: sectionOf(info.category), approved: true, starred: false,
-    };
-    await dbPut(item); items.unshift(item); lastCat = info.category; added++;
+    try {
+      const item = await Items.create({
+        kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
+        note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
+        approved: true,
+      });
+      items.unshift(item); lastCat = info.category; added++;
+    } catch (e) { return toast(e.message); }
   }
   render();
   toast(added > 1 ? `Added ${added} items` : `Saved to ${capitalize(bucketOf(lastCat))}`);
@@ -49,21 +50,21 @@ async function addFiles(fileList) {
   if (!files.length) return;
   for (const file of files) {
     const info = detectFile(file);
-    const item = {
-      id: uid(), createdAt: Date.now(), kind: "file", category: info.category,
-      title: info.title, subtitle: humanSize(file.size), url: null, blob: file,
-      mime: file.type, thumbnail: null, section: sectionOf(info.category),
-      approved: true, starred: false,
-    };
-    await dbPut(item); items.unshift(item);
+    try {
+      const payload = await Items.fileToPayload(file, {
+        kind: "file", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: humanSize(file.size), approved: true,
+      });
+      const item = await Items.create(payload);
+      items.unshift(item);
+    } catch (e) { return toast(e.message); }
   }
   render();
   toast(files.length > 1 ? `Uploaded ${files.length} files` : "File uploaded");
 }
 
 async function removeItem(id) {
-  await dbDelete(id);
-  if (objectUrls.has(id)) { URL.revokeObjectURL(objectUrls.get(id)); objectUrls.delete(id); }
+  try { await Items.remove(id); } catch (e) { return toast(e.message); }
   items = items.filter((it) => it.id !== id);
   render();
   toast("Removed");
@@ -73,8 +74,8 @@ async function toggleStar(id) {
   const it = items.find((x) => x.id === id);
   if (!it) return;
   it.starred = !it.starred;
-  await dbPut(it);
   render();
+  try { await Items.update(id, { starred: it.starred }); } catch (e) { toast(e.message); }
 }
 
 /* ---------------- Rendering ---------------- */
@@ -101,7 +102,7 @@ function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
   const tint = `thumb-tint-${bucketOf(item.category)}`;
   if (item.category === "photo") {
-    const src = item.kind === "file" ? urlForBlob(item) : (item.thumbnail || item.url);
+    const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
     if (src) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
   }
   if (item.thumbnail) {
@@ -118,9 +119,10 @@ function cardHtml(item) {
       <div class="item-actions"><button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button></div>
     </article>`;
   }
-  const open = item.kind === "file"
-    ? `<a class="item-open" href="${esc(urlForBlob(item))}" target="_blank" rel="noopener" download="${esc(item.title)}">${ICONS.external} Open</a>`
-    : item.url ? `<a class="item-open" href="${esc(item.url)}" target="_blank" rel="noopener">${ICONS.external} Open</a>` : "";
+  const href = item.hasFile ? Items.fileUrl(item) : item.url;
+  const open = href
+    ? `<a class="item-open" href="${esc(href)}" target="_blank" rel="noopener">${ICONS.external} Open</a>`
+    : "";
   return `<article class="item-card" data-id="${item.id}">
     ${thumbFor(item)}
     <div class="item-info"><h3 class="item-title">${esc(item.title)}</h3><p class="item-sub">${esc(item.subtitle || item.url || "")}</p></div>
@@ -190,15 +192,7 @@ nav.addEventListener("click", (e) => {
 
 sortSelect.addEventListener("change", () => { sortOrder = sortSelect.value; render(); });
 searchInput.addEventListener("input", () => { searchTerm = searchInput.value.trim().toLowerCase(); render(); });
-$("#logoutBtn").addEventListener("click", () => {
-  if (typeof isLoggedIn === "function" && isLoggedIn()) {
-    logout();
-    toast("Signed out");
-    setTimeout(() => (location.href = "signin.html"), 500);
-  } else {
-    location.href = "signin.html";
-  }
-});
+$("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed out"); setTimeout(() => (location.href = "signin.html"), 400); });
 
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
@@ -222,15 +216,13 @@ window.addEventListener("drop", (e) => {
 /* ---------------- Boot ---------------- */
 
 (async function init() {
+  if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }
   injectIcons();
   if (sortSelect) sortSelect.value = sortOrder;
-  try {
-    items = (await dbAll())
-      .filter((it) => it.approved !== false)   // approved (true or legacy undefined)
-      .sort((a, b) => b.createdAt - a.createdAt);
-  } catch (err) {
-    console.error("Failed to load library", err);
-    items = [];
-  }
+  // validate token; if invalid, bounce to sign-in
+  const me = await Auth.refresh();
+  if (!me) { location.replace("signin.html"); return; }
+  try { items = await Items.list({ approved: true }); }
+  catch (e) { items = []; toast(e.message); }
   render();
 })();

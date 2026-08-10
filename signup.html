@@ -49,25 +49,31 @@
 
   <p class="auth-note">Demo accounts are stored locally in your browser. This is a prototype sign-up, not production security.</p>
 
-  <script src="auth.js"></script>
+  <script src="api.js"></script>
   <script>
-    if (isLoggedIn()) location.replace("index.html");
+    if (Auth.isLoggedIn()) location.replace("index.html");
     const form = document.getElementById("form");
     const errorEl = document.getElementById("error");
+    const submitBtn = form.querySelector("button[type=submit]");
     function showError(msg) { errorEl.textContent = msg; errorEl.classList.add("show"); }
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorEl.classList.remove("show");
       const password = document.getElementById("password").value;
       const confirm = document.getElementById("confirm").value;
       if (password !== confirm) { showError("Passwords don't match."); return; }
-      const res = registerUser({
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value,
-        password,
-      });
-      if (res.ok) location.href = "index.html";
-      else showError(res.error);
+      submitBtn.disabled = true; submitBtn.textContent = "Creating…";
+      try {
+        await Auth.signup({
+          name: document.getElementById("name").value,
+          email: document.getElementById("email").value,
+          password,
+        });
+        location.href = "index.html";
+      } catch (err) {
+        showError(err.message);
+        submitBtn.disabled = false; submitBtn.textContent = "Create account";
+      }
     });
   </script>
 </body>

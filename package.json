@@ -1,0 +1,14 @@
+{
+  "name": "dump",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Dump — a calm, self-sorting research vault. Full-stack: zero-dependency Node + SQLite backend.",
+  "scripts": {
+    "start": "node --experimental-sqlite server/server.js",
+    "dev": "node --experimental-sqlite --watch server/server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
