@@ -861,6 +861,16 @@ body {
 }
 .cover-btn svg { width: 15px; height: 15px; }
 .cover-btn:hover { color: var(--terra); background: var(--panel); transform: scale(1.08); }
+.cover-btn.armed { color: #fff; background: var(--terra); border-color: var(--terra); }
+
+/* Armed-for-cover-paste state */
+.item-thumb.cover-armed, .dcard-thumb.cover-armed { outline: 2px dashed var(--terra); outline-offset: -3px; }
+.cover-hint {
+  position: absolute; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: var(--terra); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 5px 11px; border-radius: 999px; box-shadow: var(--shadow); white-space: nowrap;
+  animation: fadeIn 0.2s var(--ease);
+}
 
 /* Move the library type-tag to the bottom-left so it doesn't clash with the cover button */
 .item-thumb .type-tag { top: auto; bottom: 9px; left: 9px; }

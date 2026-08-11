@@ -166,8 +166,9 @@ function thumbFor(item) {
   } else if (item.thumbnail) {
     overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(item.thumbnail)}" onerror="this.remove()" alt="" />`;
   }
-  const coverTitle = item.hasCover ? "Replace your cover image" : "Add your own cover image";
-  return `<div class="item-thumb ${tint}">${starBtn(item)}<button class="cover-btn" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
+  const coverTitle = item.hasCover ? "Replace cover — click, then Ctrl+V" : "Add cover — click, then Ctrl+V";
+  const armed = item.id === pendingCoverId;
+  return `<div class="item-thumb ${tint} ${armed ? "cover-armed" : ""}">${starBtn(item)}<button class="cover-btn ${armed ? "armed" : ""}" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}${armed ? '<span class="cover-hint">Press Ctrl+V</span>' : ""}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
 }
 function sectionSelect(item) {
   const opts = ['<option value="">No section</option>']
@@ -357,14 +358,17 @@ function openItem(id) {
   if (href) window.open(href, "_blank", "noopener");
 }
 
-/* ---------------- Custom cover image ---------------- */
+/* ---------------- Custom cover image (paste a screenshot or browse) ---------------- */
 let pendingCoverId = null;
 const coverInput = $("#coverInput");
-function pickCover(id) { pendingCoverId = id; coverInput.value = ""; coverInput.click(); }
-coverInput.addEventListener("change", async () => {
-  const file = coverInput.files && coverInput.files[0];
-  const id = pendingCoverId; coverInput.value = ""; pendingCoverId = null;
-  if (!file || !id) return;
+function pickCover(id) {
+  if (pendingCoverId === id) { coverInput.value = ""; coverInput.click(); return; } // second click -> browse
+  pendingCoverId = id;
+  render();
+  toast("Ready — press Ctrl/⌘+V to paste your screenshot (or click again to browse)");
+}
+function clearArmed() { if (pendingCoverId) { pendingCoverId = null; render(); } }
+async function applyCover(id, file) {
   toast("Uploading cover…");
   try {
     const updated = await Items.setCover(id, file);
@@ -373,6 +377,19 @@ coverInput.addEventListener("change", async () => {
     render();
     toast("Cover updated");
   } catch (e) { toast(e.message); }
+}
+coverInput.addEventListener("change", () => {
+  const file = coverInput.files && coverInput.files[0];
+  const id = pendingCoverId; coverInput.value = ""; clearArmed();
+  if (file && id) applyCover(id, file);
+});
+// Paste a screenshot as the cover of the armed card
+window.addEventListener("paste", (e) => {
+  if (!pendingCoverId) return;
+  const imgs = clipboardImageFiles(e);
+  if (!imgs.length) return;
+  e.preventDefault();
+  const id = pendingCoverId; clearArmed(); applyCover(id, imgs[0]);
 });
 
 /* ---------------- Wiring ---------------- */
@@ -458,7 +475,7 @@ $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed o
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); }
+  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); if (pendingCoverId) clearArmed(); }
   else if (e.key.toLowerCase() === "n" && !typing && addModal.hidden && noteModal.hidden && sectionModal.hidden) { e.preventDefault(); openAddModal(); }
 });
 

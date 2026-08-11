@@ -306,3 +306,24 @@ function hydratePdfThumbs(root = document) {
     renderPdfThumb(img.getAttribute("data-pdf"), img.getAttribute("data-pdf-url"), img);
   });
 }
+
+
+/* ---------------- Clipboard images (screenshot paste) ---------------- */
+// Returns image File(s) from a paste event, handling both files and items.
+function clipboardImageFiles(e) {
+  const out = [];
+  const dt = e.clipboardData;
+  if (!dt) return out;
+  if (dt.files && dt.files.length) {
+    for (const f of dt.files) if (f.type && f.type.startsWith("image/")) out.push(f);
+  }
+  if (!out.length && dt.items) {
+    for (const it of dt.items) {
+      if (it.kind === "file" && it.type && it.type.startsWith("image/")) {
+        const f = it.getAsFile();
+        if (f) out.push(f);
+      }
+    }
+  }
+  return out;
+}
