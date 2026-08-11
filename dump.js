@@ -295,7 +295,7 @@ $("#sections").addEventListener("click", (e) => {
   const card = e.target.closest(".dcard.is-openable");
   if (card && !e.target.closest("button, select")) {
     const it = staged.find((s) => s.id === card.dataset.id);
-    if (it) { const href = it.hasFile ? Items.fileUrl(it) : it.url; if (href) window.open(href, "_blank", "noopener"); }
+    if (it) { const href = it.hasFile ? Items.fileUrl(it) : canonicalGoogleUrl(it.url); if (href) window.open(href, "_blank", "noopener"); }
   }
 });
 $("#sections").addEventListener("change", (e) => {

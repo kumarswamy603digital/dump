@@ -353,7 +353,7 @@ async function saveNote(text) {
 /* ---------------- Open an item (click the card) ---------------- */
 function openItem(id) {
   const it = items.find((x) => x.id === id); if (!it) return;
-  const href = it.hasFile ? Items.fileUrl(it) : it.url;
+  const href = it.hasFile ? Items.fileUrl(it) : canonicalGoogleUrl(it.url);
   if (href) window.open(href, "_blank", "noopener");
 }
 

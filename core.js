@@ -62,11 +62,11 @@ function detectLink(raw) {
     else if (path.includes("/presentation")) kind = "Google Slides";
     else if (path.includes("/forms")) kind = "Google Form";
     const gid = (u.pathname.match(/\/d\/([\w-]+)/) || [])[1];
-    return { ...base, category: "doc", title: kind, subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
+    return { ...base, url: canonicalGoogleUrl(full), category: "doc", title: kind, subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
   }
   if (host === "drive.google.com") {
     const gid = (u.pathname.match(/\/d\/([\w-]+)/) || [])[1] || u.searchParams.get("id");
-    return { ...base, category: "doc", title: "Google Drive file", subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
+    return { ...base, url: canonicalGoogleUrl(full), category: "doc", title: "Google Drive file", subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
   }
   if (/\.(docx?|pptx?|xlsx?|odt|rtf|txt|csv|key|pages)$/.test(path)) return { ...base, category: "doc", title: filenameFromUrl(u) || "Document", subtitle: host };
   if (/(^|\.)notion\.(so|site)$/.test(host) || host.includes("officeapps.live.com")) return { ...base, category: "doc", title: "Document", subtitle: host };
@@ -90,6 +90,34 @@ function prettyTitleFromUrl(u) {
     return decodeURIComponent(seg).replace(/\.[a-z0-9]{1,5}$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 80);
   }
   return u.hostname.replace(/^www\./, "");
+}
+
+/**
+ * Normalize a Google Docs/Drive URL to a clean, canonical link.
+ * Removes account-scoped segments like /u/1/ (a very common cause of
+ * Google's misleading "file does not exist" page) and rebuilds a
+ * standard /d/{id}/edit (or /view) URL. Non-Google URLs pass through.
+ */
+function canonicalGoogleUrl(url) {
+  if (!url) return url;
+  let u;
+  try { u = new URL(url); } catch { return url; }
+  const host = u.hostname.replace(/^www\./, "");
+  const p = u.pathname;
+  if (host === "docs.google.com") {
+    if (p.includes("/forms")) return url; // published forms use special /d/e/ ids
+    const id = (p.match(/\/d\/([\w-]+)/) || [])[1];
+    if (!id) return url;
+    if (p.includes("/spreadsheets")) return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+    if (p.includes("/presentation")) return `https://docs.google.com/presentation/d/${id}/edit`;
+    return `https://docs.google.com/document/d/${id}/edit`;
+  }
+  if (host === "drive.google.com") {
+    if (p.includes("/folders/")) return url; // keep folder links as-is
+    const id = (p.match(/\/file\/d\/([\w-]+)/) || p.match(/\/d\/([\w-]+)/) || [])[1] || u.searchParams.get("id");
+    if (id) return `https://drive.google.com/file/d/${id}/view`;
+  }
+  return url;
 }
 
 /** Detect category for a dropped/selected File. */
