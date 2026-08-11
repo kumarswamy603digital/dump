@@ -142,7 +142,7 @@ function baseFor(view) {
   else if (view === "pinned") list = list.filter((i) => i.pinned);
   else if (view === "notes") list = list.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note");
   else if (view.startsWith("sec:")) { const id = view.slice(4); list = list.filter((i) => i.sectionId === id); }
-  else if (["docs", "links", "images"].includes(view)) list = list.filter((i) => bucketOf(i.category) === view);
+  else if (["docs", "links", "images", "reels"].includes(view)) list = list.filter((i) => bucketOf(i.category) === view);
   return list;
 }
 function visibleItems(view) {
@@ -262,7 +262,7 @@ function renderSectionsManager() {
 }
 
 function updateCounts() {
-  const counts = { all: items.length, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
+  const counts = { all: items.length, reels: 0, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
   items.forEach((it) => { counts[bucketOf(it.category)]++; if (it.starred) counts.starred++; if (it.pinned) counts.pinned++; });
   // Notes = items you've annotated + standalone note items
   counts.notes = items.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note").length;

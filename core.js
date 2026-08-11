@@ -154,6 +154,7 @@ function bucketOf(cat) {
   if (cat === "doc") return "docs";
   if (cat === "note") return "notes";
   if (cat === "photo") return "images";
+  if (cat === "reel" || cat === "video") return "reels";
   return "links";
 }
 
