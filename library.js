@@ -39,7 +39,7 @@ const dropOverlay = $("#dropOverlay");
 async function addFromText(raw) {
   const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return;
-  let added = 0;
+  let added = 0, dups = 0;
   for (const part of parts) {
     const info = detectLink(part);
     try {
@@ -49,11 +49,13 @@ async function addFromText(raw) {
         note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
         approved: true, analyze: false,
       });
+      if (item.duplicate) { dups++; continue; }
       items.unshift(item); added++;
     } catch (e) { return toast(e.message); }
   }
   render();
-  toast(added > 1 ? `Added ${added} items` : "Added to your library");
+  if (added) toast(added > 1 ? `Added ${added} items` : "Added to your library");
+  else if (dups) toast(dups === 1 ? "Already in your library" : `Skipped ${dups} duplicates`);
 }
 async function addFiles(fileList) {
   const files = Array.from(fileList);
@@ -486,7 +488,9 @@ document.addEventListener("keydown", (e) => {
   injectIcons();
   if (sortSelect) sortSelect.value = sortOrder;
   try {
+    const removed = await Items.dedupe();
     [items, sections] = await Promise.all([Items.list({ approved: true }), Sections.list()]);
+    if (removed) toast(`Removed ${removed} duplicate${removed === 1 ? "" : "s"}`);
   } catch (e) {
     // apiFetch clears the token on a 401 — if that happened, the session is truly invalid.
     if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }

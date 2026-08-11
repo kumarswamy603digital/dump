@@ -88,7 +88,12 @@ const Items = {
     const d = await apiFetch("/api/items", { method: "POST", body: item });
     const it = d.item;
     it.ocrUrls = d.ocrUrls || [];   // links the server found inside a screenshot
+    it.duplicate = !!d.duplicate;   // true if this URL was already saved
     return it;
+  },
+  async dedupe() {
+    const d = await apiFetch("/api/items/dedupe", { method: "POST" });
+    return d.removed || 0;
   },
   async update(id, patch) {
     const d = await apiFetch(`/api/items/${id}`, { method: "PATCH", body: patch });

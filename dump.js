@@ -32,6 +32,7 @@ async function dumpText(raw) {
   const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return;
   busy++; updateStatus();
+  let dups = 0;
   try {
     for (const part of parts) {
       const info = detectLink(part);
@@ -46,9 +47,11 @@ async function dumpText(raw) {
         thumbnail: info.thumbnail || null,
         approved: false,
       });
+      if (item.duplicate) { dups++; continue; }
       staged.unshift(item);
       render();
     }
+    if (dups) toast(dups === 1 ? "Already saved — skipped 1 duplicate" : `Skipped ${dups} duplicates`);
   } catch (e) { toast(e.message); }
   finally { busy = Math.max(0, busy - 1); render(); }
 }
@@ -71,13 +74,13 @@ async function dumpFiles(fileList) {
         approved: false,
       });
       const item = await Items.create(payload);
-      staged.unshift(item);
-      render();
+      if (!item.duplicate) { staged.unshift(item); render(); }
       if (item.ocrUrls && item.ocrUrls.length) foundUrls.push(...item.ocrUrls);
     }
     // Screenshots: turn any links the AI read out of the image into their own items.
     const known = new Set(staged.map((s) => s.url).filter(Boolean));
     const fresh = [...new Set(foundUrls)].filter((u) => !known.has(u));
+    let added = 0;
     for (const url of fresh) {
       const info = detectLink(url);
       const link = await Items.create({
@@ -85,8 +88,8 @@ async function dumpFiles(fileList) {
         title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
         thumbnail: info.thumbnail || null, approved: false,
       });
-      staged.unshift(link);
-      render();
+      if (link.duplicate) continue;
+      staged.unshift(link); render(); added++;
     }
     if (fresh.length) toast(`Found ${fresh.length} link${fresh.length === 1 ? "" : "s"} in your screenshot`);
   } catch (e) { toast(e.message); }
@@ -344,8 +347,11 @@ window.addEventListener("drop", (e) => {
   injectIcons();
   setupAuthLink();
   if (Auth.isLoggedIn()) {
-    try { staged = await Items.list({ approved: false }); }
-    catch (e) { staged = []; if (!Auth.isLoggedIn()) setupAuthLink(); else toast(e.message); }
+    try {
+      const removed = await Items.dedupe();
+      staged = await Items.list({ approved: false });
+      if (removed) toast(`Removed ${removed} duplicate${removed === 1 ? "" : "s"}`);
+    } catch (e) { staged = []; if (!Auth.isLoggedIn()) setupAuthLink(); else toast(e.message); }
     if (linkInput) linkInput.focus();
   }
   render();

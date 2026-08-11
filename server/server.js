@@ -137,6 +137,19 @@ function verifyToken(token) {
 }
 function uid() { return crypto.randomBytes(9).toString("base64url"); }
 
+// Normalize a URL for duplicate detection (drop www, trailing slash, hash, tracking params).
+function normUrl(u) {
+  if (!u) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(u) ? u : "https://" + u);
+    url.hash = "";
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "igshid", "si", "usp"].forEach((p) => url.searchParams.delete(p));
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    const path = url.pathname.replace(/\/+$/, "");
+    return host + path + (url.search || "");
+  } catch { return (u || "").trim(); }
+}
+
 /* ---------------- HTTP helpers ---------------- */
 function send(res, status, obj, headers = {}) {
   const body = JSON.stringify(obj);
@@ -552,6 +565,28 @@ async function handleApi(req, res, url) {
   }
 
   // --- Items (all protected) ---
+  // --- Remove duplicate items (same normalized URL) — keeps the best copy ---
+  if (p === "/api/items/dedupe" && method === "POST") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const rows = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL ORDER BY created_at ASC").all(user.id);
+    const groups = new Map();
+    for (const r of rows) {
+      const k = normUrl(r.url); if (!k) continue;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    const score = (r) => (r.approved ? 8 : 0) + (r.cover_mime ? 4 : 0) + ((r.annotation && r.annotation.trim()) ? 2 : 0) + (r.pinned ? 1 : 0) + (r.starred ? 1 : 0);
+    const del = db.prepare("DELETE FROM items WHERE id = ? AND user_id = ?");
+    let removed = 0;
+    for (const [, arr] of groups) {
+      if (arr.length < 2) continue;
+      arr.sort((a, b) => score(b) - score(a) || a.created_at - b.created_at); // keep highest score, then oldest
+      for (const r of arr.slice(1)) { del.run(r.id, user.id); removed++; }
+    }
+    return send(res, 200, { removed });
+  }
+
   if (p === "/api/items" && method === "GET") {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
@@ -569,6 +604,14 @@ async function handleApi(req, res, url) {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
     const b = await readJson(req);
+
+    // De-duplicate: if this URL already exists for the user, return the existing item.
+    if (b.url) {
+      const nu = normUrl(b.url);
+      const dup = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL").all(user.id).find((r) => normUrl(r.url) === nu);
+      if (dup) return send(res, 200, { item: rowToItem(dup), duplicate: true, ocrUrls: [] });
+    }
+
     const id = uid();
     let fileBuf = null, mime = b.mime || null, fileName = null;
     if (b.fileData) {
