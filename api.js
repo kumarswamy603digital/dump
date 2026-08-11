@@ -104,6 +104,14 @@ const Items = {
 
   // Authenticated file URL usable in <img src> / <a href>.
   fileUrl(item) { return item.fileUrl ? `${item.fileUrl}?token=${encodeURIComponent(getToken())}` : null; },
+
+  // Custom cover image (user-uploaded), overrides any auto preview.
+  coverUrl(item) { return item.coverUrl ? `${item.coverUrl}?token=${encodeURIComponent(getToken())}` : null; },
+  async setCover(id, file) {
+    const dataUrl = await blobToDataURL(file);
+    const d = await apiFetch(`/api/items/${id}/cover`, { method: "POST", body: { fileData: dataUrl, mime: file.type } });
+    return d.item;
+  },
 };
 
 /* ---------------- sections (custom collections) ---------------- */

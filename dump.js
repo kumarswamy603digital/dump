@@ -155,7 +155,9 @@ async function approveAll() {
 function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
   let overlay = "";
-  if (item.category === "photo") {
+  if (item.hasCover) {
+    overlay = `<img class="thumb-img" referrerpolicy="no-referrer" src="${esc(Items.coverUrl(item))}" onerror="this.remove()" alt="" />`;
+  } else if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
     if (src) overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(src)}" onerror="this.remove()" alt="" />`;
   } else if (item.category === "doc" && item.hasFile) {
@@ -163,7 +165,8 @@ function thumbFor(item) {
   } else if (item.thumbnail) {
     overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(item.thumbnail)}" onerror="this.remove()" alt="" />`;
   }
-  return `<div class="dcard-thumb ${overlay ? "" : "tinted"}"><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}</div>`;
+  const coverTitle = item.hasCover ? "Replace your cover image" : "Add your own cover image";
+  return `<div class="dcard-thumb ${overlay ? "" : "tinted"}"><button class="cover-btn" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}</div>`;
 }
 
 function sectionSelect(item) {
@@ -230,6 +233,24 @@ function updateStatus() {
   stagingStatus.textContent = `Sorted into ${SECTIONS.length} shelves · review and approve to send to your library.`;
 }
 
+/* ---------------- Custom cover image ---------------- */
+let pendingCoverId = null;
+const coverInput = $("#coverInput");
+function pickCover(id) { pendingCoverId = id; coverInput.value = ""; coverInput.click(); }
+if (coverInput) coverInput.addEventListener("change", async () => {
+  const file = coverInput.files && coverInput.files[0];
+  const id = pendingCoverId; coverInput.value = ""; pendingCoverId = null;
+  if (!file || !id) return;
+  toast("Uploading cover…");
+  try {
+    const updated = await Items.setCover(id, file);
+    const it = staged.find((s) => s.id === id);
+    if (it) { it.hasCover = true; it.coverUrl = updated.coverUrl; }
+    render();
+    toast("Cover updated");
+  } catch (e) { toast(e.message); }
+});
+
 /* ---------------- Auth link in nav ---------------- */
 function setupAuthLink() {
   const wrap = document.getElementById("authArea");
@@ -270,6 +291,7 @@ $("#sections").addEventListener("click", (e) => {
   if (del) { removeStaged(del.getAttribute("data-del")); return; }
   const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
   const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
+  const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
   const card = e.target.closest(".dcard.is-openable");
   if (card && !e.target.closest("button, select")) {
     const it = staged.find((s) => s.id === card.dataset.id);

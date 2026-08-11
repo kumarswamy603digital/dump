@@ -97,6 +97,8 @@ function ensureColumn(table, col, def) {
 ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("items", "section_id", "TEXT");
 ensureColumn("items", "annotation", "TEXT");
+ensureColumn("items", "cover_data", "BLOB");
+ensureColumn("items", "cover_mime", "TEXT");
 
 /* ---------------- Crypto helpers ---------------- */
 function hashPassword(pw) {
@@ -348,6 +350,8 @@ function rowToItem(r) {
     sectionId: r.section_id || null, annotation: r.annotation || "", createdAt: r.created_at,
     hasFile: !!r.file_name,
     fileUrl: r.file_name ? `/api/files/${r.id}` : null,
+    hasCover: !!r.cover_mime,
+    coverUrl: r.cover_mime ? `/api/covers/${r.id}` : null,
   };
 }
 
@@ -516,6 +520,35 @@ async function handleApi(req, res, url) {
       "Cache-Control": "private, max-age=3600",
     });
     return res.end(Buffer.from(row.file_data));
+  }
+
+  // --- Custom cover image serving ---
+  const coverMatch = p.match(/^\/api\/covers\/([\w-]+)$/);
+  if (coverMatch && method === "GET") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const row = db.prepare("SELECT cover_mime, cover_data FROM items WHERE id = ? AND user_id = ?").get(coverMatch[1], user.id);
+    if (!row || !row.cover_data) return send(res, 404, { error: "Not found" });
+    res.writeHead(200, { "Content-Type": row.cover_mime || "image/png", "Cache-Control": "private, max-age=3600" });
+    return res.end(Buffer.from(row.cover_data));
+  }
+
+  // --- Set a custom cover image on any item ---
+  const coverSetMatch = p.match(/^\/api\/items\/([\w-]+)\/cover$/);
+  if (coverSetMatch && method === "POST") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const row = db.prepare("SELECT id FROM items WHERE id = ? AND user_id = ?").get(coverSetMatch[1], user.id);
+    if (!row) return send(res, 404, { error: "Not found" });
+    const b = await readJson(req);
+    if (!b.fileData) return send(res, 400, { error: "No image provided." });
+    const mimeMatch = /^data:([^;]+);base64,/.exec(String(b.fileData));
+    const cmime = (mimeMatch && mimeMatch[1]) || b.mime || "image/png";
+    if (!cmime.startsWith("image/")) return send(res, 400, { error: "Cover must be an image." });
+    const buf = Buffer.from(String(b.fileData).replace(/^data:[^;]+;base64,/, ""), "base64");
+    if (!buf.length) return send(res, 400, { error: "Empty image." });
+    db.prepare("UPDATE items SET cover_data = ?, cover_mime = ? WHERE id = ? AND user_id = ?").run(buf, cmime, coverSetMatch[1], user.id);
+    return send(res, 200, { item: rowToItem(db.prepare("SELECT * FROM items WHERE id = ?").get(coverSetMatch[1])) });
   }
 
   // --- Items (all protected) ---

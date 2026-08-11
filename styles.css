@@ -846,3 +846,21 @@ body {
 .dcard-controls { display: flex; gap: 6px; margin-bottom: 8px; }
 .dcard-controls > button { flex: 1; }
 .dcard-controls .pin-btn, .dcard-controls .note-btn { justify-content: center; padding: 7px 8px; font-size: 12px; }
+
+
+/* ============================================================
+   Custom cover image button (set your own preview)
+   ============================================================ */
+.cover-btn {
+  position: absolute; top: 9px; left: 9px; z-index: 4;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter: blur(4px);
+  border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+  transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.15s var(--ease);
+}
+.cover-btn svg { width: 15px; height: 15px; }
+.cover-btn:hover { color: var(--terra); background: var(--panel); transform: scale(1.08); }
+
+/* Move the library type-tag to the bottom-left so it doesn't clash with the cover button */
+.item-thumb .type-tag { top: auto; bottom: 9px; left: 9px; }

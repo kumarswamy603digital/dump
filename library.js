@@ -155,17 +155,19 @@ function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
   const tint = `thumb-tint-${bucketOf(item.category)}`;
   let overlay = "";
-  if (item.category === "photo") {
+  if (item.hasCover) {
+    // User-supplied cover always wins
+    overlay = `<img class="thumb-img" referrerpolicy="no-referrer" src="${esc(Items.coverUrl(item))}" onerror="this.remove()" alt="" />`;
+  } else if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
     if (src) overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(src)}" onerror="this.remove()" alt="" />`;
   } else if (item.category === "doc" && item.hasFile) {
-    // Stored PDF: render page 1 via PDF.js (hydrated after render)
     overlay = `<img class="thumb-img" data-pdf="${item.id}" data-pdf-url="${esc(Items.fileUrl(item))}" onerror="this.remove()" alt="" />`;
   } else if (item.thumbnail) {
-    // Google Docs/Drive first-page thumbnail, YouTube, etc.
     overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(item.thumbnail)}" onerror="this.remove()" alt="" />`;
   }
-  return `<div class="item-thumb ${tint}">${starBtn(item)}<span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
+  const coverTitle = item.hasCover ? "Replace your cover image" : "Add your own cover image";
+  return `<div class="item-thumb ${tint}">${starBtn(item)}<button class="cover-btn" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
 }
 function sectionSelect(item) {
   const opts = ['<option value="">No section</option>']
@@ -355,6 +357,24 @@ function openItem(id) {
   if (href) window.open(href, "_blank", "noopener");
 }
 
+/* ---------------- Custom cover image ---------------- */
+let pendingCoverId = null;
+const coverInput = $("#coverInput");
+function pickCover(id) { pendingCoverId = id; coverInput.value = ""; coverInput.click(); }
+coverInput.addEventListener("change", async () => {
+  const file = coverInput.files && coverInput.files[0];
+  const id = pendingCoverId; coverInput.value = ""; pendingCoverId = null;
+  if (!file || !id) return;
+  toast("Uploading cover…");
+  try {
+    const updated = await Items.setCover(id, file);
+    const it = items.find((x) => x.id === id);
+    if (it) { it.hasCover = true; it.coverUrl = updated.coverUrl; }
+    render();
+    toast("Cover updated");
+  } catch (e) { toast(e.message); }
+});
+
 /* ---------------- Wiring ---------------- */
 $("#newSectionBtn").addEventListener("click", openSectionModal);
 $("#addBtn").addEventListener("click", openAddModal);
@@ -398,6 +418,7 @@ mainEl.addEventListener("click", (e) => {
   const star = e.target.closest("[data-star]"); if (star) return toggleStar(star.getAttribute("data-star"));
   const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
   const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
+  const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
   // Click the card body -> open the item (reel / link / file)
   const card = e.target.closest(".item-card.is-openable");
   if (card && !e.target.closest("button, select, a, .item-actions, .item-controls")) openItem(card.dataset.id);
