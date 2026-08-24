@@ -320,7 +320,7 @@ async function openReelSectionModal() {
   reelSecNewWrap.hidden = true; reelSecNewInput.value = "";
   reelSecConfirm.disabled = true;
   const n = selectedReels.size;
-  reelSecSub.textContent = `Choose a section for the ${n} selected reel${n === 1 ? "" : "s"} — they'll be filed there in your library.`;
+  reelSecSub.textContent = `Move the ${n} selected reel${n === 1 ? "" : "s"} into one of your sections.`;
   reelSecList.innerHTML = `<p class="reel-sec-empty">Loading your sections…</p>`;
   reelSecModal.hidden = false;
   try { reelSections = await Sections.list(); }
@@ -348,7 +348,7 @@ async function approveSelectedReels(sectionId, sectionName) {
   selectedReels.clear();
   closeReelSectionModal();
   render();
-  toast(`${ids.length} reel${ids.length === 1 ? "" : "s"} approved → ${sectionName || "your section"}`);
+  toast(`Moved ${ids.length} reel${ids.length === 1 ? "" : "s"} → ${sectionName || "your section"}`);
 }
 
 /* ---------------- Custom cover image (paste a screenshot or browse) ---------------- */
