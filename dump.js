@@ -143,10 +143,11 @@ async function saveNote(text) {
   toast(text.trim() ? "Note saved" : "Note cleared");
 }
 async function approveAll() {
-  if (!staged.length) return;
-  const count = staged.length;
+  const top = staged.filter((s) => !s.parentId);
+  if (!top.length) return;
+  const count = top.length;
   approveBtn.disabled = true;
-  try { for (const it of staged) await Items.update(it.id, { approved: true }); }
+  try { for (const it of staged) await Items.update(it.id, { approved: true }); } // approves reels + their attachments
   catch (e) { approveBtn.disabled = false; return toast(e.message); }
   staged = [];
   render();
@@ -190,6 +191,22 @@ function noteSnippet(item) {
   if (!t) return "";
   return `<p class="item-note-snippet"><span class="ic">${ICONS.notebook}</span>${esc(t)}</p>`;
 }
+function attachmentsOf(id) { return staged.filter((a) => a.parentId === id); }
+function attachmentsHtml(item) {
+  if (item.category !== "reel" && item.category !== "video") return "";
+  const atts = attachmentsOf(item.id);
+  const chips = atts.map((a) => {
+    const meta = TYPE_META[a.category] || TYPE_META.link;
+    return `<span class="att-chip" data-open-att="${a.id}" title="${esc(a.title)}">
+      <span class="ic">${ICONS[meta.icon]}</span><span class="att-title">${esc(a.title)}</span>
+      <button class="att-del" data-del="${a.id}" title="Remove attachment">${ICONS.x}</button>
+    </span>`;
+  }).join("");
+  return `<div class="attachments">
+    ${atts.length ? `<div class="att-list">${chips}</div>` : ""}
+    <button class="att-add" data-attach="${item.id}"><span class="ic">${ICONS.plus}</span> Attach PDF, link or doc</button>
+  </div>`;
+}
 
 function dumpCardHtml(item) {
   const isNote = item.category === "note";
@@ -209,6 +226,7 @@ function dumpCardHtml(item) {
       <div class="dcard-controls">${pinBtn(item)}${noteBtn(item)}</div>
       ${sectionSelect(item)}
     </div>
+    ${attachmentsHtml(item)}
   </article>`;
 }
 
@@ -216,14 +234,15 @@ function render() {
   const counts = { reels: 0, pdfs: 0, links: 0, screenshots: 0 };
   SECTIONS.forEach((sec) => {
     const bodyEl = document.querySelector(`[data-body="${sec}"]`);
-    const list = staged.filter((it) => it.section === sec);
+    const list = staged.filter((it) => !it.parentId && it.section === sec); // attachments nest inside their reel
     counts[sec] = list.length;
     bodyEl.innerHTML = list.length ? list.map(dumpCardHtml).join("") : `<div class="section-empty">Nothing here yet</div>`;
   });
   document.querySelectorAll("[data-scount]").forEach((el) => { el.textContent = counts[el.dataset.scount]; });
   hydratePdfThumbs(document.getElementById("sections"));
-  approveCount.textContent = staged.length;
-  approveBtn.disabled = staged.length === 0 || busy > 0;
+  const topCount = staged.filter((s) => !s.parentId).length;
+  approveCount.textContent = topCount;
+  approveBtn.disabled = topCount === 0 || busy > 0;
   updateStatus();
 }
 
@@ -233,7 +252,7 @@ function updateStatus() {
     return;
   }
   if (busy > 0) { stagingStatus.innerHTML = `<span class="dot-pulse"></span> AI is reading &amp; sorting…`; return; }
-  if (!staged.length) { stagingStatus.textContent = "Nothing dumped yet — paste a link or screenshot above."; return; }
+  if (!staged.some((s) => !s.parentId)) { stagingStatus.textContent = "Nothing dumped yet — paste a link or screenshot above."; return; }
   stagingStatus.textContent = `Sorted into ${SECTIONS.length} shelves · review and approve to send to your library.`;
 }
 
@@ -262,6 +281,60 @@ if (coverInput) coverInput.addEventListener("change", () => {
   const id = pendingCoverId; coverInput.value = ""; clearArmed();
   if (file && id) applyCover(id, file);
 });
+
+/* ---------------- Attach modal (attach items to a reel) ---------------- */
+let attachTargetId = null;
+const attachModal = $("#attachModal");
+const attachLinkInput = $("#attachLinkInput");
+const attachFileInput = $("#attachFileInput");
+const attachModalSub = $("#attachModalSub");
+function openAttachModal(reelId) {
+  const it = staged.find((s) => s.id === reelId); if (!it) return;
+  attachTargetId = reelId; attachLinkInput.value = "";
+  attachModalSub.textContent = `Attach to “${it.title}”`;
+  attachModal.hidden = false; setTimeout(() => attachLinkInput.focus(), 40);
+}
+function closeAttachModal() { attachModal.hidden = true; attachTargetId = null; }
+async function attachLink(raw) {
+  const reelId = attachTargetId;
+  const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!reelId || !parts.length) return;
+  let added = 0, dups = 0;
+  for (const part of parts) {
+    const info = detectLink(part);
+    try {
+      const item = await Items.create({
+        kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
+        note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
+        approved: false, analyze: false, parent_id: reelId,
+      });
+      if (item.duplicate) { dups++; continue; }
+      staged.push(item); added++;
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  if (added) toast(added > 1 ? `Attached ${added} items` : "Attached");
+  else if (dups) toast("Already attached");
+}
+async function attachFiles(fileList) {
+  const reelId = attachTargetId;
+  const files = Array.from(fileList);
+  if (!reelId || !files.length) return;
+  for (const file of files) {
+    const info = detectFile(file);
+    try {
+      const payload = await Items.fileToPayload(file, {
+        kind: "file", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: humanSize(file.size), approved: false, analyze: false, parent_id: reelId,
+      });
+      staged.push(await Items.create(payload));
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  toast(files.length > 1 ? `Attached ${files.length} files` : "File attached");
+}
+function submitAttach() { if (attachLinkInput.value.trim()) { attachLink(attachLinkInput.value); closeAttachModal(); } }
 
 /* ---------------- Auth link in nav ---------------- */
 function setupAuthLink() {
@@ -296,8 +369,17 @@ $("#noteModalClose").addEventListener("click", closeNoteModal);
 $("#noteSave").addEventListener("click", () => saveNote(noteInput.value));
 $("#noteClear").addEventListener("click", () => saveNote(""));
 noteModal.addEventListener("click", (e) => { if (e.target === noteModal) closeNoteModal(); });
+
+// Attach modal
+$("#attachModalClose").addEventListener("click", closeAttachModal);
+$("#attachCancel").addEventListener("click", closeAttachModal);
+$("#attachSubmit").addEventListener("click", submitAttach);
+attachLinkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAttach(); });
+attachFileInput.addEventListener("change", () => { attachFiles(attachFileInput.files); attachFileInput.value = ""; closeAttachModal(); });
+attachModal.addEventListener("click", (e) => { if (e.target === attachModal) closeAttachModal(); });
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { if (!noteModal.hidden) closeNoteModal(); else if (pendingCoverId) clearArmed(); }
+  if (e.key === "Escape") { if (!attachModal.hidden) closeAttachModal(); else if (!noteModal.hidden) closeNoteModal(); else if (pendingCoverId) clearArmed(); }
 });
 
 $("#sections").addEventListener("click", (e) => {
@@ -306,8 +388,11 @@ $("#sections").addEventListener("click", (e) => {
   const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
   const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
   const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
+  const attach = e.target.closest("[data-attach]"); if (attach) return openAttachModal(attach.getAttribute("data-attach"));
+  const openAtt = e.target.closest("[data-open-att]");
+  if (openAtt) { const a = staged.find((s) => s.id === openAtt.getAttribute("data-open-att")); if (a) { const href = a.hasFile ? Items.fileUrl(a) : canonicalGoogleUrl(a.url); if (href) window.open(href, "_blank", "noopener"); } return; }
   const card = e.target.closest(".dcard.is-openable");
-  if (card && !e.target.closest("button, select")) {
+  if (card && !e.target.closest("button, select, .attachments")) {
     const it = staged.find((s) => s.id === card.dataset.id);
     if (it) { const href = it.hasFile ? Items.fileUrl(it) : canonicalGoogleUrl(it.url); if (href) window.open(href, "_blank", "noopener"); }
   }
