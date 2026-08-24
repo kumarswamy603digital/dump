@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
-  "description": "Dump — a calm, self-sorting research vault. Full-stack: zero-dependency Node + SQLite backend.",
+  "description": "Dump — a calm, self-sorting research vault. Full-stack: Node + libSQL/Turso, deployable to Vercel.",
   "scripts": {
-    "start": "node --experimental-sqlite server/server.js",
-    "dev": "node --experimental-sqlite --watch server/server.js"
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=18"
   }
 }
