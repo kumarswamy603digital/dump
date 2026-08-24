@@ -7,6 +7,7 @@
 
 let staged = [];   // items with approved === false (server-backed)
 let busy = 0;      // in-flight server operations (classify/OCR)
+let selectedReels = new Set();   // reel ids ticked for the batch "approve to a section" flow
 
 const $ = (s) => document.querySelector(s);
 const fileInput = $("#fileInput");
@@ -220,8 +221,13 @@ function dumpCardHtml(item) {
          ${noteSnippet(item)}
        </div>`;
   const openable = (item.hasFile || item.url) ? "is-openable" : "";
-  return `<article class="dcard ${openable}" data-id="${item.id}">
-    <div class="dcard-top"><button class="dcard-del" data-del="${item.id}" title="Discard">${ICONS.x}</button></div>
+  const inReels = item.section === "reels" && !item.parentId;
+  const selected = inReels && selectedReels.has(item.id);
+  const selectBox = inReels
+    ? `<label class="dcard-check" title="Select this reel to approve"><input type="checkbox" data-select="${item.id}" ${selected ? "checked" : ""} /></label>`
+    : "";
+  return `<article class="dcard ${openable} ${selected ? "selected" : ""}" data-id="${item.id}">
+    <div class="dcard-top">${selectBox}<button class="dcard-del" data-del="${item.id}" title="Discard">${ICONS.x}</button></div>
     ${body}
     <div class="dcard-foot">
       <div class="dcard-controls">${pinBtn(item)}${noteBtn(item)}</div>
@@ -244,6 +250,7 @@ function render() {
   const topCount = staged.filter((s) => !s.parentId).length;
   approveCount.textContent = topCount;
   approveBtn.disabled = topCount === 0 || busy > 0;
+  updateReelSelBar();
   updateStatus();
 }
 
@@ -255,6 +262,93 @@ function updateStatus() {
   if (busy > 0) { stagingStatus.innerHTML = `<span class="dot-pulse"></span> AI is reading &amp; sorting…`; return; }
   if (!staged.some((s) => !s.parentId)) { stagingStatus.textContent = "Nothing dumped yet — paste a link or screenshot above."; return; }
   stagingStatus.textContent = `Sorted into ${SECTIONS.length} shelves · review and approve to send to your library.`;
+}
+
+/* ---------------- Reels: tick-to-select + approve into a section ---------------- */
+const reelSecModal = $("#reelSectionModal");
+const reelSecList = $("#reelSecList");
+const reelSecNewWrap = $("#reelSecNewWrap");
+const reelSecNewInput = $("#reelSecNewInput");
+const reelSecConfirm = $("#reelSecConfirm");
+const reelSecSub = $("#reelSecSub");
+let reelSections = [];        // the user's created sections (loaded when the modal opens)
+let chosenSectionId = null;   // an existing section picked in the modal
+let creatingNew = false;      // is the "new section" input showing?
+
+function reelsInShelf() { return staged.filter((s) => !s.parentId && s.section === "reels"); }
+
+// Show/refresh the "Select all · Approve N" bar above the reels shelf.
+function updateReelSelBar() {
+  const bar = document.getElementById("reelsSelBar");
+  if (!bar) return;
+  const reels = reelsInShelf();
+  for (const id of [...selectedReels]) if (!reels.some((r) => r.id === id)) selectedReels.delete(id); // prune gone reels
+  bar.hidden = reels.length === 0;
+  const n = selectedReels.size;
+  const cnt = document.getElementById("reelsSelCount"); if (cnt) cnt.textContent = n;
+  const btn = document.getElementById("approveReelsBtn"); if (btn) btn.disabled = n === 0 || busy > 0;
+  const all = document.getElementById("reelsSelectAll");
+  if (all) { all.checked = reels.length > 0 && n === reels.length; all.indeterminate = n > 0 && n < reels.length; }
+}
+
+function toggleReelSelect(id, checked) {
+  if (checked) selectedReels.add(id); else selectedReels.delete(id);
+  const card = document.querySelector(`.dcard[data-id="${id}"]`);
+  if (card) card.classList.toggle("selected", checked);
+  updateReelSelBar();
+}
+
+function updateReelSecConfirm() {
+  reelSecConfirm.disabled = !(chosenSectionId || (creatingNew && reelSecNewInput.value.trim()));
+}
+
+function renderReelSecList() {
+  const opts = reelSections.map((s) =>
+    `<button type="button" class="reel-sec-opt ${chosenSectionId === s.id ? "active" : ""}" data-secpick="${s.id}">
+       <span class="ic">${ICONS.folder}</span>
+       <span class="reel-sec-name">${esc(s.name)}</span>
+       <span class="reel-sec-count">${s.count}</span>
+     </button>`).join("");
+  const empty = reelSections.length ? "" : `<p class="reel-sec-empty">You don't have any sections yet — create your first one below.</p>`;
+  reelSecList.innerHTML = empty + opts +
+    `<button type="button" class="reel-sec-newbtn ${creatingNew ? "active" : ""}" id="reelSecNewBtn"><span class="ic">${ICONS.plus}</span> Create new section</button>`;
+}
+
+async function openReelSectionModal() {
+  if (!selectedReels.size) return;
+  chosenSectionId = null; creatingNew = false;
+  reelSecNewWrap.hidden = true; reelSecNewInput.value = "";
+  reelSecConfirm.disabled = true;
+  const n = selectedReels.size;
+  reelSecSub.textContent = `Choose a section for the ${n} selected reel${n === 1 ? "" : "s"} — they'll be filed there in your library.`;
+  reelSecList.innerHTML = `<p class="reel-sec-empty">Loading your sections…</p>`;
+  reelSecModal.hidden = false;
+  try { reelSections = await Sections.list(); }
+  catch (e) { reelSections = []; toast(e.message); }
+  renderReelSecList();
+}
+
+function closeReelSectionModal() { reelSecModal.hidden = true; }
+
+async function approveSelectedReels(sectionId, sectionName) {
+  const ids = [...selectedReels];
+  if (!ids.length || !sectionId) return;
+  reelSecConfirm.disabled = true;
+  try {
+    for (const id of ids) {
+      await Items.update(id, { approved: true, section_id: sectionId });
+      // attachments live with their reel — approve + file them alongside it
+      for (const att of staged.filter((a) => a.parentId === id)) {
+        await Items.update(att.id, { approved: true, section_id: sectionId });
+      }
+    }
+  } catch (e) { reelSecConfirm.disabled = false; return toast(e.message); }
+  const idSet = new Set(ids);
+  staged = staged.filter((s) => !idSet.has(s.id) && !idSet.has(s.parentId));
+  selectedReels.clear();
+  closeReelSectionModal();
+  render();
+  toast(`${ids.length} reel${ids.length === 1 ? "" : "s"} approved → ${sectionName || "your section"}`);
 }
 
 /* ---------------- Custom cover image (paste a screenshot or browse) ---------------- */
@@ -404,6 +498,42 @@ fileInput.addEventListener("change", () => { dumpFiles(fileInput.files); fileInp
 if (folderInput) folderInput.addEventListener("change", () => { dumpFiles(folderInput.files); folderInput.value = ""; });
 approveBtn.addEventListener("click", approveAll);
 
+// Reels: select-all + "approve selected → section"
+const reelsSelectAll = $("#reelsSelectAll");
+if (reelsSelectAll) reelsSelectAll.addEventListener("change", (e) => {
+  const reels = reelsInShelf();
+  if (e.target.checked) reels.forEach((r) => selectedReels.add(r.id));
+  else selectedReels.clear();
+  render();
+});
+const approveReelsBtn = $("#approveReelsBtn");
+if (approveReelsBtn) approveReelsBtn.addEventListener("click", openReelSectionModal);
+
+// Reel → section picker modal
+$("#reelSecClose").addEventListener("click", closeReelSectionModal);
+$("#reelSecCancel").addEventListener("click", closeReelSectionModal);
+reelSecModal.addEventListener("click", (e) => { if (e.target === reelSecModal) closeReelSectionModal(); });
+reelSecList.addEventListener("click", (e) => {
+  const pick = e.target.closest("[data-secpick]");
+  if (pick) { chosenSectionId = pick.getAttribute("data-secpick"); creatingNew = false; reelSecNewWrap.hidden = true; renderReelSecList(); updateReelSecConfirm(); return; }
+  if (e.target.closest("#reelSecNewBtn")) { creatingNew = true; chosenSectionId = null; reelSecNewWrap.hidden = false; renderReelSecList(); reelSecNewInput.focus(); updateReelSecConfirm(); }
+});
+reelSecNewInput.addEventListener("input", () => { creatingNew = true; chosenSectionId = null; updateReelSecConfirm(); });
+reelSecNewInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !reelSecConfirm.disabled) reelSecConfirm.click(); });
+reelSecConfirm.addEventListener("click", async () => {
+  if (creatingNew && reelSecNewInput.value.trim()) {
+    let sec;
+    try { sec = await Sections.create(reelSecNewInput.value.trim()); }
+    catch (e) { return toast(e.message); }
+    reelSections.push(sec);
+    return approveSelectedReels(sec.id, sec.name);
+  }
+  if (chosenSectionId) {
+    const sec = reelSections.find((s) => s.id === chosenSectionId);
+    return approveSelectedReels(chosenSectionId, sec && sec.name);
+  }
+});
+
 // Note modal
 $("#noteModalClose").addEventListener("click", closeNoteModal);
 $("#noteSave").addEventListener("click", () => saveNote(noteInput.value));
@@ -419,7 +549,7 @@ attachFileInput.addEventListener("change", () => { attachFiles(attachFileInput.f
 attachModal.addEventListener("click", (e) => { if (e.target === attachModal) closeAttachModal(); });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { if (!wbModal.hidden) closeWhiteboard(); else if (!attachModal.hidden) closeAttachModal(); else if (!noteModal.hidden) closeNoteModal(); else if (pendingCoverId) clearArmed(); }
+  if (e.key === "Escape") { if (!reelSecModal.hidden) closeReelSectionModal(); else if (!wbModal.hidden) closeWhiteboard(); else if (!attachModal.hidden) closeAttachModal(); else if (!noteModal.hidden) closeNoteModal(); else if (pendingCoverId) clearArmed(); }
 });
 
 $("#sections").addEventListener("click", (e) => {
@@ -433,12 +563,14 @@ $("#sections").addEventListener("click", (e) => {
   const openAtt = e.target.closest("[data-open-att]");
   if (openAtt) { const a = staged.find((s) => s.id === openAtt.getAttribute("data-open-att")); if (a) { const href = a.hasFile ? Items.fileUrl(a) : canonicalGoogleUrl(a.url); if (href) window.open(href, "_blank", "noopener"); } return; }
   const card = e.target.closest(".dcard.is-openable");
-  if (card && !e.target.closest("button, select, .attachments")) {
+  if (card && !e.target.closest("button, select, .attachments, .dcard-check")) {
     const it = staged.find((s) => s.id === card.dataset.id);
     if (it) { const href = it.hasFile ? Items.fileUrl(it) : canonicalGoogleUrl(it.url); if (href) window.open(href, "_blank", "noopener"); }
   }
 });
 $("#sections").addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-select]");
+  if (sel) { toggleReelSelect(sel.getAttribute("data-select"), sel.checked); return; }
   const mv = e.target.closest("[data-move]");
   if (mv) moveStaged(mv.getAttribute("data-move"), mv.value);
 });

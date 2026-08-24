@@ -1020,3 +1020,45 @@ a, button, .btn, .nav-item, .seg, .icon-btn, .pin-btn, .note-btn,
   /* Section manager cards: one per row. */
   .sections-grid { grid-template-columns: 1fr; }
 }
+
+
+
+/* ============================================================
+   Reels: per-reel approval checkbox + "approve to a section"
+   ============================================================ */
+
+/* Toolbar above the reels shelf (Select all · Approve N) */
+.reels-selbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 2px 2px 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--line-2);
+  flex-wrap: wrap;
+}
+.reels-selall { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 550; color: var(--ink-2); cursor: pointer; user-select: none; }
+.reels-selall input { width: 17px; height: 17px; accent-color: var(--primary); cursor: pointer; }
+.reels-selbar .btn-sm { padding: 8px 14px; }
+.reels-selbar .btn-sm .ic svg { width: 15px; height: 15px; }
+.reels-selbar .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The tick box at the top-left of each reel card */
+.dcard-check { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 3px; margin-right: auto; }
+.dcard-check input { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+.dcard.selected { border-color: var(--terra); box-shadow: 0 0 0 2px color-mix(in srgb, var(--terra) 32%, transparent); }
+
+/* Section picker (inside the approve-reels modal) */
+.reel-sec-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 2px; max-height: 46vh; overflow-y: auto; }
+.reel-sec-opt, .reel-sec-newbtn {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 11px 13px; border-radius: 11px; border: 1px solid var(--line-2);
+  background: var(--panel); color: var(--ink-2); font-family: inherit; font-size: 14px; font-weight: 550;
+  cursor: pointer; transition: border-color 0.15s var(--ease), background 0.15s var(--ease), color 0.15s var(--ease);
+}
+.reel-sec-opt .ic, .reel-sec-newbtn .ic { color: var(--terra); flex-shrink: 0; display: inline-flex; }
+.reel-sec-opt .ic svg, .reel-sec-newbtn .ic svg { width: 17px; height: 17px; }
+.reel-sec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reel-sec-count { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
+.reel-sec-opt:hover, .reel-sec-newbtn:hover { border-color: var(--terra); background: var(--panel-soft); color: var(--ink); }
+.reel-sec-opt.active { border-color: var(--terra); background: var(--terra-soft); color: var(--ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--terra) 22%, transparent); }
+.reel-sec-newbtn { border-style: dashed; color: var(--muted); }
+.reel-sec-newbtn.active { border-color: var(--terra); color: var(--ink-2); }
+.reel-sec-empty { color: var(--muted); font-size: 13.5px; text-align: center; padding: 12px 8px; margin: 0; }
+.reel-sec-newwrap { margin-top: 10px; }

@@ -75,6 +75,12 @@
         <!-- Four section columns -->
         <div class="section-col" data-section="reels">
           <div class="section-col-head"><span class="ic" data-icon="video"></span><h3>Reels</h3><span class="section-col-count" data-scount="reels">0</span></div>
+          <div class="reels-selbar" id="reelsSelBar" hidden>
+            <label class="reels-selall"><input type="checkbox" id="reelsSelectAll" /><span>Select all</span></label>
+            <button class="btn btn-primary btn-sm" id="approveReelsBtn" disabled>
+              <span class="ic" data-icon="check"></span> Approve <span id="reelsSelCount">0</span>
+            </button>
+          </div>
           <div class="section-col-body" data-body="reels"></div>
         </div>
         <div class="section-col" data-section="pdfs">
@@ -145,6 +151,25 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" id="noteClear">Clear note</button>
         <button class="btn btn-primary" id="noteSave">Save note</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Approve selected reels → choose a section -->
+  <div class="modal-overlay" id="reelSectionModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reelSecTitle">
+      <div class="modal-head">
+        <h3 id="reelSecTitle">Approve reels to a section</h3>
+        <button class="icon-btn" id="reelSecClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="reelSecSub">Choose which section these reels should be filed in.</p>
+      <div class="reel-sec-list" id="reelSecList"></div>
+      <div class="reel-sec-newwrap" id="reelSecNewWrap" hidden>
+        <input type="text" id="reelSecNewInput" class="modal-input" placeholder="New section name…" autocomplete="off" maxlength="60" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="reelSecCancel">Cancel</button>
+        <button class="btn btn-primary" id="reelSecConfirm" disabled>Approve &amp; file</button>
       </div>
     </div>
   </div>
