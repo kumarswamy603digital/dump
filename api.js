@@ -86,7 +86,14 @@ const Items = {
   },
   async create(item) {
     const d = await apiFetch("/api/items", { method: "POST", body: item });
-    return d.item;
+    const it = d.item;
+    it.ocrUrls = d.ocrUrls || [];   // links the server found inside a screenshot
+    it.duplicate = !!d.duplicate;   // true if this URL was already saved
+    return it;
+  },
+  async dedupe() {
+    const d = await apiFetch("/api/items/dedupe", { method: "POST" });
+    return d.removed || 0;
   },
   async update(id, patch) {
     const d = await apiFetch(`/api/items/${id}`, { method: "PATCH", body: patch });
@@ -102,6 +109,14 @@ const Items = {
 
   // Authenticated file URL usable in <img src> / <a href>.
   fileUrl(item) { return item.fileUrl ? `${item.fileUrl}?token=${encodeURIComponent(getToken())}` : null; },
+
+  // Custom cover image (user-uploaded), overrides any auto preview.
+  coverUrl(item) { return item.coverUrl ? `${item.coverUrl}?token=${encodeURIComponent(getToken())}` : null; },
+  async setCover(id, file) {
+    const dataUrl = await blobToDataURL(file);
+    const d = await apiFetch(`/api/items/${id}/cover`, { method: "POST", body: { fileData: dataUrl, mime: file.type } });
+    return d.item;
+  },
 };
 
 /* ---------------- sections (custom collections) ---------------- */

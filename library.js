@@ -22,25 +22,24 @@ const emptyState = $("#emptyState");
 const emptyTitle = $("#emptyTitle");
 const emptyText = $("#emptyText");
 const countLabel = $("#countLabel");
-const fileInput = $("#fileInput");
-const linkInput = $("#linkInput");
 const searchInput = $("#searchInput");
 const sortSelect = $("#sortSelect");
 const nav = $("#nav");
 const navSections = $("#navSections");
-const modalOverlay = $("#modalOverlay");
-const dropOverlay = $("#dropOverlay");
 const timeFilterEl = $("#timeFilter");
 const sectionModal = $("#sectionModal");
 const sectionNameInput = $("#sectionNameInput");
 const sectionError = $("#sectionError");
+const addModal = $("#addModal");
+const addLinkInput = $("#addLinkInput");
+const addFileInput = $("#addFileInput");
+const dropOverlay = $("#dropOverlay");
 
-/* ---------------- Adding (direct to library, approved) ---------------- */
-
+/* ---------------- Direct add (no AI — saved straight to the library) ---------------- */
 async function addFromText(raw) {
   const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return;
-  let added = 0, lastCat = null;
+  let added = 0, dups = 0;
   for (const part of parts) {
     const info = detectLink(part);
     try {
@@ -48,15 +47,16 @@ async function addFromText(raw) {
         kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
         title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
         note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
-        approved: true,
+        approved: true, analyze: false,
       });
-      items.unshift(item); lastCat = info.category; added++;
+      if (item.duplicate) { dups++; continue; }
+      items.unshift(item); added++;
     } catch (e) { return toast(e.message); }
   }
   render();
-  toast(added > 1 ? `Added ${added} items` : `Saved to ${capitalize(bucketOf(lastCat))}`);
+  if (added) toast(added > 1 ? `Added ${added} items` : "Added to your library");
+  else if (dups) toast(dups === 1 ? "Already in your library" : `Skipped ${dups} duplicates`);
 }
-
 async function addFiles(fileList) {
   const files = Array.from(fileList);
   if (!files.length) return;
@@ -65,14 +65,19 @@ async function addFiles(fileList) {
     try {
       const payload = await Items.fileToPayload(file, {
         kind: "file", category: info.category, section: sectionOf(info.category),
-        title: info.title, subtitle: humanSize(file.size), approved: true,
+        title: info.title, subtitle: humanSize(file.size), approved: true, analyze: false,
       });
       items.unshift(await Items.create(payload));
     } catch (e) { return toast(e.message); }
   }
   render();
-  toast(files.length > 1 ? `Uploaded ${files.length} files` : "File uploaded");
+  toast(files.length > 1 ? `Added ${files.length} files` : "File added");
 }
+function openAddModal() { addLinkInput.value = ""; addModal.hidden = false; setTimeout(() => addLinkInput.focus(), 40); }
+function closeAddModal() { addModal.hidden = true; }
+function submitAdd() { if (addLinkInput.value.trim()) { addFromText(addLinkInput.value); addLinkInput.value = ""; closeAddModal(); } }
+
+/* ---------------- Mutations (organize only — adding happens on the Dump page) ---------------- */
 
 async function removeItem(id) {
   try { await Items.remove(id); } catch (e) { return toast(e.message); }
@@ -123,7 +128,7 @@ function inTime(it) {
 }
 function matchesSearch(it) {
   if (!searchTerm) return true;
-  return `${it.title} ${it.subtitle} ${it.url || ""} ${it.note || ""}`.toLowerCase().includes(searchTerm);
+  return `${it.title} ${it.subtitle} ${it.url || ""} ${it.note || ""} ${it.annotation || ""}`.toLowerCase().includes(searchTerm);
 }
 function sortList(list) {
   return list.sort((a, b) => {
@@ -131,12 +136,15 @@ function sortList(list) {
     return sortOrder === "old" ? a.createdAt - b.createdAt : b.createdAt - a.createdAt;
   });
 }
+function attachmentsOf(id) { return items.filter((a) => a.parentId === id); }
+
 function baseFor(view) {
-  let list = items.slice();
+  let list = items.filter((i) => !i.parentId); // attachments live inside their reel, not top-level
   if (view === "starred") list = list.filter((i) => i.starred);
   else if (view === "pinned") list = list.filter((i) => i.pinned);
+  else if (view === "notes") list = list.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note");
   else if (view.startsWith("sec:")) { const id = view.slice(4); list = list.filter((i) => i.sectionId === id); }
-  else if (["docs", "notes", "links", "images"].includes(view)) list = list.filter((i) => bucketOf(i.category) === view);
+  else if (["docs", "links", "images", "reels"].includes(view)) list = list.filter((i) => bucketOf(i.category) === view);
   return list;
 }
 function visibleItems(view) {
@@ -150,12 +158,21 @@ function starBtn(item) {
 function thumbFor(item) {
   const meta = TYPE_META[item.category] || TYPE_META.link;
   const tint = `thumb-tint-${bucketOf(item.category)}`;
-  if (item.category === "photo") {
+  let overlay = "";
+  if (item.hasCover) {
+    // User-supplied cover always wins
+    overlay = `<img class="thumb-img" referrerpolicy="no-referrer" src="${esc(Items.coverUrl(item))}" onerror="this.remove()" alt="" />`;
+  } else if (item.category === "photo") {
     const src = item.hasFile ? Items.fileUrl(item) : (item.thumbnail || item.url);
-    if (src) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(src)}" alt="${esc(item.title)}" /></div>`;
+    if (src) overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(src)}" onerror="this.remove()" alt="" />`;
+  } else if (item.category === "doc" && item.hasFile) {
+    overlay = `<img class="thumb-img" data-pdf="${item.id}" data-pdf-url="${esc(Items.fileUrl(item))}" onerror="this.remove()" alt="" />`;
+  } else if (item.thumbnail) {
+    overlay = `<img class="thumb-img" loading="lazy" referrerpolicy="no-referrer" src="${esc(item.thumbnail)}" onerror="this.remove()" alt="" />`;
   }
-  if (item.thumbnail) return `<div class="item-thumb">${starBtn(item)}<img loading="lazy" src="${esc(item.thumbnail)}" alt="${esc(item.title)}" onerror="this.remove()" /></div>`;
-  return `<div class="item-thumb ${tint}">${starBtn(item)}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span><span class="thumb-ic ic">${ICONS[meta.icon]}</span></div>`;
+  const coverTitle = item.hasCover ? "Replace cover — click, then Ctrl+V" : "Add cover — click, then Ctrl+V";
+  const armed = item.id === pendingCoverId;
+  return `<div class="item-thumb ${tint} ${armed ? "cover-armed" : ""}">${starBtn(item)}<button class="cover-btn ${armed ? "armed" : ""}" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}${armed ? '<span class="cover-hint">Press Ctrl+V</span>' : ""}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
 }
 function sectionSelect(item) {
   const opts = ['<option value="">No section</option>']
@@ -166,8 +183,32 @@ function sectionSelect(item) {
 function pinBtn(item) {
   return `<button class="pin-btn ${item.pinned ? "pinned" : ""}" data-pin="${item.id}" title="${item.pinned ? "Unpin" : "Pin"}">${ICONS.pin}<span>${item.pinned ? "Pinned" : "Pin"}</span></button>`;
 }
+function noteBtn(item) {
+  const has = item.annotation && item.annotation.trim();
+  return `<button class="note-btn ${has ? "has-note" : ""}" data-note="${item.id}" title="${has ? "Edit your note" : "Add a note"}">${ICONS.notebook}<span>Note</span></button>`;
+}
+function noteSnippet(item) {
+  const t = (item.annotation || "").trim();
+  if (!t) return "";
+  return `<p class="item-note-snippet"><span class="ic">${ICONS.notebook}</span>${esc(t)}</p>`;
+}
 function controlsRow(item) {
   return `<div class="item-controls">${pinBtn(item)}${sectionSelect(item)}</div>`;
+}
+function attachmentsHtml(item) {
+  if (item.category !== "reel" && item.category !== "video") return "";
+  const atts = attachmentsOf(item.id);
+  const chips = atts.map((a) => {
+    const meta = TYPE_META[a.category] || TYPE_META.link;
+    return `<span class="att-chip" data-open-att="${a.id}" title="${esc(a.title)}">
+      <span class="ic">${ICONS[meta.icon]}</span><span class="att-title">${esc(a.title)}</span>
+      <button class="att-del" data-del="${a.id}" title="Remove attachment">${ICONS.x}</button>
+    </span>`;
+  }).join("");
+  return `<div class="attachments">
+    ${atts.length ? `<div class="att-list">${chips}</div>` : ""}
+    <button class="att-add" data-attach="${item.id}"><span class="ic">${ICONS.plus}</span> Attach PDF, link or doc</button>
+  </div>`;
 }
 function cardHtml(item) {
   if (item.category === "note") {
@@ -178,13 +219,17 @@ function cardHtml(item) {
       ${controlsRow(item)}
     </article>`;
   }
-  const href = item.hasFile ? Items.fileUrl(item) : item.url;
-  const open = href ? `<a class="item-open" href="${esc(href)}" target="_blank" rel="noopener">${ICONS.external} Open</a>` : "";
-  return `<article class="item-card" data-id="${item.id}">
+  const openable = (item.hasFile || item.url) ? "is-openable" : "";
+  return `<article class="item-card ${openable}" data-id="${item.id}">
     ${thumbFor(item)}
-    <div class="item-info"><h3 class="item-title">${esc(item.title)}</h3><p class="item-sub">${esc(item.subtitle || item.url || "")}</p></div>
-    <div class="item-actions">${open}<button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button></div>
+    <div class="item-info">
+      <h3 class="item-title">${esc(item.title)}</h3>
+      <p class="item-sub">${esc(item.subtitle || item.url || "")}</p>
+      ${noteSnippet(item)}
+    </div>
+    <div class="item-actions">${noteBtn(item)}<button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button></div>
     ${controlsRow(item)}
+    ${attachmentsHtml(item)}
   </article>`;
 }
 
@@ -214,6 +259,7 @@ function renderPinned() {
       ${col("PDFs & Docs", "file-text", groups.pdfs)}
       ${col("Images", "image", groups.images)}
     </div>`;
+  hydratePdfThumbs(vaultView);
   countLabel.textContent = `${list.length} pinned`;
 }
 
@@ -234,8 +280,11 @@ function renderSectionsManager() {
 }
 
 function updateCounts() {
-  const counts = { all: items.length, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
-  items.forEach((it) => { counts[bucketOf(it.category)]++; if (it.starred) counts.starred++; if (it.pinned) counts.pinned++; });
+  const top = items.filter((i) => !i.parentId); // exclude attachments from top-level counts
+  const counts = { all: top.length, reels: 0, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
+  top.forEach((it) => { counts[bucketOf(it.category)]++; if (it.starred) counts.starred++; if (it.pinned) counts.pinned++; });
+  // Notes = items you've annotated + standalone note items
+  counts.notes = top.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note").length;
   document.querySelectorAll("[data-count]").forEach((el) => { el.textContent = counts[el.dataset.count] ?? 0; });
 }
 
@@ -259,6 +308,7 @@ function render() {
   const label = activeView.startsWith("sec:") ? ` in ${sectionName(activeView.slice(4))}` : "";
   countLabel.textContent = `${list.length} item${list.length === 1 ? "" : "s"}${label}`;
   grid.innerHTML = list.map(cardHtml).join("");
+  hydratePdfThumbs(grid);
 
   if (list.length === 0) {
     emptyState.style.display = "flex";
@@ -268,6 +318,9 @@ function render() {
     } else if (searchTerm) {
       emptyTitle.textContent = "No matches found";
       emptyText.textContent = "Try a different search, or clear it to see everything.";
+    } else if (activeView === "notes") {
+      emptyTitle.textContent = "No notes yet";
+      emptyText.textContent = "Open any item and tap “Note” to jot something down — it'll show up here.";
     } else if (timeFilter === "older") {
       emptyTitle.textContent = "Nothing older than a month";
       emptyText.textContent = "Items you saved more than 30 days ago will show up here.";
@@ -279,10 +332,6 @@ function render() {
     emptyState.style.display = "none";
   }
 }
-
-/* ---------------- Add modal ---------------- */
-function openModal() { modalOverlay.hidden = false; setTimeout(() => linkInput.focus(), 40); }
-function closeModal() { modalOverlay.hidden = true; linkInput.value = ""; }
 
 /* ---------------- Section modal ---------------- */
 function openSectionModal() { sectionError.classList.remove("show"); sectionNameInput.value = ""; sectionModal.hidden = false; setTimeout(() => sectionNameInput.focus(), 40); }
@@ -298,18 +347,160 @@ async function submitSection() {
   } catch (e) { sectionError.textContent = e.message; sectionError.classList.add("show"); }
 }
 
-/* ---------------- Wiring ---------------- */
-$("#addBtn").addEventListener("click", openModal);
-$("#addFirstBtn").addEventListener("click", openModal);
-$("#modalClose").addEventListener("click", closeModal);
-$("#modalCancel").addEventListener("click", closeModal);
-modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
-function submitLink() { if (linkInput.value.trim()) { addFromText(linkInput.value); closeModal(); } }
-$("#addLinkBtn").addEventListener("click", submitLink);
-linkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitLink(); });
-fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; closeModal(); });
+/* ---------------- Note modal ---------------- */
+let editingNoteId = null;
+const noteModal = $("#noteModal");
+const noteInput = $("#noteInput");
+const noteModalSub = $("#noteModalSub");
+function openNoteModal(id) {
+  const it = items.find((x) => x.id === id); if (!it) return;
+  editingNoteId = id;
+  noteInput.value = it.annotation || "";
+  noteModalSub.textContent = `Note for “${it.title}”`;
+  noteModal.hidden = false;
+  setTimeout(() => noteInput.focus(), 40);
+}
+function closeNoteModal() { noteModal.hidden = true; editingNoteId = null; }
+async function saveNote(text) {
+  const id = editingNoteId;
+  const it = items.find((x) => x.id === id);
+  closeNoteModal();
+  if (!it) return;
+  it.annotation = text;
+  render();
+  try { await Items.update(id, { annotation: text }); } catch (e) { toast(e.message); }
+  toast(text.trim() ? "Note saved" : "Note cleared");
+}
 
+/* ---------------- Open an item (click the card) ---------------- */
+function openItem(id) {
+  const it = items.find((x) => x.id === id); if (!it) return;
+  const href = it.hasFile ? Items.fileUrl(it) : canonicalGoogleUrl(it.url);
+  if (href) window.open(href, "_blank", "noopener");
+}
+
+/* ---------------- Custom cover image (paste a screenshot or browse) ---------------- */
+let pendingCoverId = null;
+const coverInput = $("#coverInput");
+function pickCover(id) {
+  if (pendingCoverId === id) { coverInput.value = ""; coverInput.click(); return; } // second click -> browse
+  pendingCoverId = id;
+  render();
+  toast("Ready — press Ctrl/⌘+V to paste your screenshot (or click again to browse)");
+}
+function clearArmed() { if (pendingCoverId) { pendingCoverId = null; render(); } }
+async function applyCover(id, file) {
+  toast("Uploading cover…");
+  try {
+    const updated = await Items.setCover(id, file);
+    const it = items.find((x) => x.id === id);
+    if (it) { it.hasCover = true; it.coverUrl = updated.coverUrl; }
+    render();
+    toast("Cover updated");
+  } catch (e) { toast(e.message); }
+}
+coverInput.addEventListener("change", () => {
+  const file = coverInput.files && coverInput.files[0];
+  const id = pendingCoverId; coverInput.value = ""; clearArmed();
+  if (file && id) applyCover(id, file);
+});
+// Paste a screenshot as the cover of the armed card
+window.addEventListener("paste", (e) => {
+  if (!pendingCoverId) return;
+  const imgs = clipboardImageFiles(e);
+  if (!imgs.length) return;
+  e.preventDefault();
+  const id = pendingCoverId; clearArmed(); applyCover(id, imgs[0]);
+});
+
+/* ---------------- Attach modal (attach items to a reel) ---------------- */
+let attachTargetId = null;
+const attachModal = $("#attachModal");
+const attachLinkInput = $("#attachLinkInput");
+const attachFileInput = $("#attachFileInput");
+const attachModalSub = $("#attachModalSub");
+function openAttachModal(reelId) {
+  const it = items.find((x) => x.id === reelId); if (!it) return;
+  attachTargetId = reelId;
+  attachLinkInput.value = "";
+  attachModalSub.textContent = `Attach to “${it.title}”`;
+  attachModal.hidden = false;
+  setTimeout(() => attachLinkInput.focus(), 40);
+}
+function closeAttachModal() { attachModal.hidden = true; attachTargetId = null; }
+async function attachLink(raw) {
+  const reelId = attachTargetId;
+  const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!reelId || !parts.length) return;
+  let added = 0, dups = 0;
+  for (const part of parts) {
+    const info = detectLink(part);
+    try {
+      const item = await Items.create({
+        kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
+        note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
+        approved: true, analyze: false, parent_id: reelId,
+      });
+      if (item.duplicate) { dups++; continue; }
+      items.push(item); added++;
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  if (added) toast(added > 1 ? `Attached ${added} items` : "Attached");
+  else if (dups) toast("Already attached");
+}
+async function attachFiles(fileList) {
+  const reelId = attachTargetId;
+  const files = Array.from(fileList);
+  if (!reelId || !files.length) return;
+  for (const file of files) {
+    const info = detectFile(file);
+    try {
+      const payload = await Items.fileToPayload(file, {
+        kind: "file", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: humanSize(file.size), approved: true, analyze: false, parent_id: reelId,
+      });
+      items.push(await Items.create(payload));
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  toast(files.length > 1 ? `Attached ${files.length} files` : "File attached");
+}
+function submitAttach() { if (attachLinkInput.value.trim()) { attachLink(attachLinkInput.value); closeAttachModal(); } }
+
+/* ---------------- Wiring ---------------- */
 $("#newSectionBtn").addEventListener("click", openSectionModal);
+$("#attachModalClose").addEventListener("click", closeAttachModal);
+$("#attachCancel").addEventListener("click", closeAttachModal);
+$("#attachSubmit").addEventListener("click", submitAttach);
+attachLinkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAttach(); });
+attachFileInput.addEventListener("change", () => { attachFiles(attachFileInput.files); attachFileInput.value = ""; closeAttachModal(); });
+attachModal.addEventListener("click", (e) => { if (e.target === attachModal) closeAttachModal(); });
+$("#addBtn").addEventListener("click", openAddModal);
+$("#addModalClose").addEventListener("click", closeAddModal);
+$("#addCancel").addEventListener("click", closeAddModal);
+$("#addSubmit").addEventListener("click", submitAdd);
+addLinkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAdd(); });
+addFileInput.addEventListener("change", () => { addFiles(addFileInput.files); addFileInput.value = ""; closeAddModal(); });
+addModal.addEventListener("click", (e) => { if (e.target === addModal) closeAddModal(); });
+
+// Drag & drop anywhere -> add directly to the library
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); dragDepth++; dropOverlay.classList.add("show"); } });
+window.addEventListener("dragover", (e) => { if (dropOverlay.classList.contains("show")) e.preventDefault(); });
+window.addEventListener("dragleave", () => { if (dropOverlay.classList.contains("show")) { dragDepth--; if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove("show"); } } });
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove("show");
+  const dt = e.dataTransfer; if (!dt) return;
+  if (dt.files && dt.files.length) { addFiles(dt.files); return; }
+  const text = dt.getData("text/uri-list") || dt.getData("text/plain");
+  if (text) addFromText(text);
+});
+$("#noteModalClose").addEventListener("click", closeNoteModal);
+$("#noteSave").addEventListener("click", () => saveNote(noteInput.value));
+$("#noteClear").addEventListener("click", () => saveNote(""));
+noteModal.addEventListener("click", (e) => { if (e.target === noteModal) closeNoteModal(); });
 $("#sectionModalClose").addEventListener("click", closeSectionModal);
 $("#sectionCancel").addEventListener("click", closeSectionModal);
 $("#sectionCreate").addEventListener("click", submitSection);
@@ -326,6 +517,13 @@ mainEl.addEventListener("click", (e) => {
   const del = e.target.closest("[data-del]"); if (del) return removeItem(del.getAttribute("data-del"));
   const star = e.target.closest("[data-star]"); if (star) return toggleStar(star.getAttribute("data-star"));
   const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
+  const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
+  const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
+  const openAtt = e.target.closest("[data-open-att]"); if (openAtt) return openItem(openAtt.getAttribute("data-open-att"));
+  const attach = e.target.closest("[data-attach]"); if (attach) return openAttachModal(attach.getAttribute("data-attach"));
+  // Click the card body -> open the item (reel / link / file)
+  const card = e.target.closest(".item-card.is-openable");
+  if (card && !e.target.closest("button, select, a, .item-actions, .item-controls, .attachments")) openItem(card.dataset.id);
 });
 mainEl.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-section]");
@@ -343,6 +541,9 @@ nav.addEventListener("click", (e) => {
   if (item) setView(item.dataset.view);
 });
 
+// Top-right User Vault button -> jump to the vault (Pinned) view
+$("#vaultBtn").addEventListener("click", () => setView("pinned"));
+
 // Time filter
 timeFilterEl.addEventListener("click", (e) => {
   const seg = e.target.closest(".seg"); if (!seg) return;
@@ -359,20 +560,8 @@ $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed o
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape") { if (!modalOverlay.hidden) closeModal(); if (!sectionModal.hidden) closeSectionModal(); }
-  else if (e.key.toLowerCase() === "n" && !typing && modalOverlay.hidden && sectionModal.hidden) { e.preventDefault(); openModal(); }
-});
-
-let dragDepth = 0;
-window.addEventListener("dragenter", (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); dragDepth++; dropOverlay.classList.add("show"); } });
-window.addEventListener("dragover", (e) => { if (dropOverlay.classList.contains("show")) e.preventDefault(); });
-window.addEventListener("dragleave", () => { if (dropOverlay.classList.contains("show")) { dragDepth--; if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove("show"); } } });
-window.addEventListener("drop", (e) => {
-  e.preventDefault(); dragDepth = 0; dropOverlay.classList.remove("show");
-  const dt = e.dataTransfer; if (!dt) return;
-  if (dt.files && dt.files.length) { addFiles(dt.files); return; }
-  const text = dt.getData("text/uri-list") || dt.getData("text/plain");
-  if (text) addFromText(text);
+  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); if (!attachModal.hidden) closeAttachModal(); if (pendingCoverId) clearArmed(); }
+  else if (e.key.toLowerCase() === "n" && !typing && addModal.hidden && noteModal.hidden && sectionModal.hidden && attachModal.hidden) { e.preventDefault(); openAddModal(); }
 });
 
 /* ---------------- Boot ---------------- */
@@ -382,7 +571,9 @@ window.addEventListener("drop", (e) => {
   injectIcons();
   if (sortSelect) sortSelect.value = sortOrder;
   try {
+    const removed = await Items.dedupe();
     [items, sections] = await Promise.all([Items.list({ approved: true }), Sections.list()]);
+    if (removed) toast(`Removed ${removed} duplicate${removed === 1 ? "" : "s"}`);
   } catch (e) {
     // apiFetch clears the token on a 401 — if that happened, the session is truly invalid.
     if (!Auth.isLoggedIn()) { location.replace("signin.html"); return; }

@@ -1,6 +1,6 @@
 /* ============================================================
    Dump — shared core
-   Detection engine · IndexedDB storage · icons · Groq AI
+   Detection engine · sections · icons · helpers
    Loaded by every page before its page-specific script.
    ============================================================ */
 
@@ -61,9 +61,13 @@ function detectLink(raw) {
     if (path.includes("/spreadsheets")) kind = "Google Sheet";
     else if (path.includes("/presentation")) kind = "Google Slides";
     else if (path.includes("/forms")) kind = "Google Form";
-    return { ...base, category: "doc", title: kind, subtitle: host };
+    const gid = (u.pathname.match(/\/d\/([\w-]+)/) || [])[1];
+    return { ...base, url: canonicalGoogleUrl(full), category: "doc", title: kind, subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
   }
-  if (host === "drive.google.com") return { ...base, category: "doc", title: "Google Drive file", subtitle: host };
+  if (host === "drive.google.com") {
+    const gid = (u.pathname.match(/\/d\/([\w-]+)/) || [])[1] || u.searchParams.get("id");
+    return { ...base, url: canonicalGoogleUrl(full), category: "doc", title: "Google Drive file", subtitle: host, thumbnail: gid ? `https://drive.google.com/thumbnail?id=${gid}&sz=w1000` : null };
+  }
   if (/\.(docx?|pptx?|xlsx?|odt|rtf|txt|csv|key|pages)$/.test(path)) return { ...base, category: "doc", title: filenameFromUrl(u) || "Document", subtitle: host };
   if (/(^|\.)notion\.(so|site)$/.test(host) || host.includes("officeapps.live.com")) return { ...base, category: "doc", title: "Document", subtitle: host };
   if (/\.(png|jpe?g|gif|webp|svg|avif|bmp)$/.test(path)) return { ...base, category: "photo", title: filenameFromUrl(u) || "Image", subtitle: host, thumbnail: full };
@@ -86,6 +90,34 @@ function prettyTitleFromUrl(u) {
     return decodeURIComponent(seg).replace(/\.[a-z0-9]{1,5}$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 80);
   }
   return u.hostname.replace(/^www\./, "");
+}
+
+/**
+ * Normalize a Google Docs/Drive URL to a clean, canonical link.
+ * Removes account-scoped segments like /u/1/ (a very common cause of
+ * Google's misleading "file does not exist" page) and rebuilds a
+ * standard /d/{id}/edit (or /view) URL. Non-Google URLs pass through.
+ */
+function canonicalGoogleUrl(url) {
+  if (!url) return url;
+  let u;
+  try { u = new URL(url); } catch { return url; }
+  const host = u.hostname.replace(/^www\./, "");
+  const p = u.pathname;
+  if (host === "docs.google.com") {
+    if (p.includes("/forms")) return url; // published forms use special /d/e/ ids
+    const id = (p.match(/\/d\/([\w-]+)/) || [])[1];
+    if (!id) return url;
+    if (p.includes("/spreadsheets")) return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+    if (p.includes("/presentation")) return `https://docs.google.com/presentation/d/${id}/edit`;
+    return `https://docs.google.com/document/d/${id}/edit`;
+  }
+  if (host === "drive.google.com") {
+    if (p.includes("/folders/")) return url; // keep folder links as-is
+    const id = (p.match(/\/file\/d\/([\w-]+)/) || p.match(/\/d\/([\w-]+)/) || [])[1] || u.searchParams.get("id");
+    if (id) return `https://drive.google.com/file/d/${id}/view`;
+  }
+  return url;
 }
 
 /** Detect category for a dropped/selected File. */
@@ -122,78 +154,13 @@ function bucketOf(cat) {
   if (cat === "doc") return "docs";
   if (cat === "note") return "notes";
   if (cat === "photo") return "images";
+  if (cat === "reel" || cat === "video") return "reels";
   return "links";
 }
 
-/* ---------------- Groq AI classifier ----------------
-   Optional: refines classification into one of the four sections.
-   Falls back silently to the rule-based sectionOf() when no key
-   is set or the request fails.                                        */
-
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_KEY_LS = "dump-groq-key";
-const GROQ_TEXT_MODEL = "openai/gpt-oss-20b";
-const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-
-function getGroqKey() { try { return localStorage.getItem(GROQ_KEY_LS) || ""; } catch { return ""; } }
-function setGroqKey(k) { try { k ? localStorage.setItem(GROQ_KEY_LS, k.trim()) : localStorage.removeItem(GROQ_KEY_LS); } catch {} }
-function hasGroq() { return !!getGroqKey(); }
-
-const GROQ_SYSTEM =
-  "You are a strict classifier. Put the item into exactly ONE of these four categories: " +
-  "reels (short videos/reels — Instagram reels, TikTok, YouTube shorts, any video), " +
-  "pdfs (PDFs and documents), " +
-  "links (general web links, articles, notes, plain text), " +
-  "screenshots (images, screenshots, photos). " +
-  "Answer with ONLY the single category word: reels, pdfs, links, or screenshots.";
-
-function normalizeSection(text) {
-  const t = (text || "").toLowerCase();
-  if (t.includes("reel") || t.includes("video")) return "reels";
-  if (t.includes("pdf") || t.includes("doc")) return "pdfs";
-  if (t.includes("screenshot") || t.includes("image") || t.includes("photo")) return "screenshots";
-  if (t.includes("link") || t.includes("note") || t.includes("article")) return "links";
-  return null;
-}
-
-async function groqCall(model, messages) {
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getGroqKey()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages, temperature: 0, max_tokens: 12 }),
-  });
-  if (!res.ok) throw new Error("Groq HTTP " + res.status);
-  const data = await res.json();
-  return normalizeSection(data.choices?.[0]?.message?.content || "");
-}
-
-/**
- * Classify an item with Groq. Returns a section string, or null when
- * AI is unavailable / fails (caller should keep the rule-based section).
- */
-async function aiClassify(item) {
-  if (!hasGroq()) return null;
-  try {
-    if (item.kind === "file" && (item.mime || "").startsWith("image/") && item.blob) {
-      const dataUrl = await blobToDataURL(item.blob);
-      return await groqCall(GROQ_VISION_MODEL, [
-        { role: "system", content: GROQ_SYSTEM },
-        { role: "user", content: [
-          { type: "text", text: "Classify this image into reels, pdfs, links, or screenshots." },
-          { type: "image_url", image_url: { url: dataUrl } },
-        ] },
-      ]);
-    }
-    const content = item.url || item.note || item.title || "";
-    return await groqCall(GROQ_TEXT_MODEL, [
-      { role: "system", content: GROQ_SYSTEM },
-      { role: "user", content: `Classify this item: ${content}` },
-    ]);
-  } catch (e) {
-    console.warn("Groq classification failed:", e.message);
-    return null;
-  }
-}
+/* ---------------- File helper ----------------
+   AI classification + screenshot OCR now run server-side (see server.js),
+   configured with keys in the backend .env — no client key needed.        */
 
 function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {
@@ -235,6 +202,7 @@ const ICONS = {
   user: SVG('<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
   mail: SVG('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'),
   lock: SVG('<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+  camera: SVG('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>'),
 };
 
 const TYPE_META = {
@@ -282,4 +250,81 @@ function toast(msg) {
   el.classList.add("show");
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+}
+
+
+/* ---------------- PDF first-page thumbnails (PDF.js, lazy-loaded) ----------------
+   Renders page 1 of a stored PDF to a small image, so document cards show
+   a real first-page preview. Loaded from CDN only when needed; degrades to
+   the doc icon if unavailable (e.g. offline).                                    */
+
+const PDFJS_VER = "3.11.174";
+let _pdfjsPromise = null;
+function loadPdfJs() {
+  if (typeof window !== "undefined" && window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (_pdfjsPromise) return _pdfjsPromise;
+  _pdfjsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.min.js`;
+    s.onload = () => {
+      try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.worker.min.js`; } catch {}
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => reject(new Error("Failed to load PDF.js"));
+    document.head.appendChild(s);
+  });
+  return _pdfjsPromise;
+}
+
+const _pdfThumbCache = new Map(); // itemId -> dataURL
+async function renderPdfThumb(id, url, img) {
+  if (!img) return;
+  if (_pdfThumbCache.has(id)) { img.src = _pdfThumbCache.get(id); return; }
+  try {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ url }).promise;
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const scale = 460 / base.width;
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(vp.width);
+    canvas.height = Math.ceil(vp.height);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    const data = canvas.toDataURL("image/jpeg", 0.82);
+    _pdfThumbCache.set(id, data);
+    img.src = data;
+  } catch (e) {
+    img.remove(); // fall back to the icon underneath
+  }
+}
+
+// Render first-page previews for any PDF <img data-pdf> that isn't hydrated yet.
+function hydratePdfThumbs(root = document) {
+  root.querySelectorAll("img[data-pdf]").forEach((img) => {
+    if (img.dataset.hydrated) return;
+    img.dataset.hydrated = "1";
+    renderPdfThumb(img.getAttribute("data-pdf"), img.getAttribute("data-pdf-url"), img);
+  });
+}
+
+
+/* ---------------- Clipboard images (screenshot paste) ---------------- */
+// Returns image File(s) from a paste event, handling both files and items.
+function clipboardImageFiles(e) {
+  const out = [];
+  const dt = e.clipboardData;
+  if (!dt) return out;
+  if (dt.files && dt.files.length) {
+    for (const f of dt.files) if (f.type && f.type.startsWith("image/")) out.push(f);
+  }
+  if (!out.length && dt.items) {
+    for (const it of dt.items) {
+      if (it.kind === "file" && it.type && it.type.startsWith("image/")) {
+        const f = it.getAsFile();
+        if (f) out.push(f);
+      }
+    }
+  }
+  return out;
 }

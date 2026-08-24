@@ -26,8 +26,11 @@
     </div>
 
     <div class="topbar-actions">
-      <button class="btn btn-primary" id="addBtn">
-        <span class="ic" data-icon="plus"></span> Add
+      <button class="btn btn-primary btn-sm" id="addBtn" title="Add directly to your library">
+        <span class="ic" data-icon="plus"></span> <span class="add-label">Add</span>
+      </button>
+      <button class="btn btn-secondary btn-sm" id="vaultBtn" title="Your pinned items & sections">
+        <span class="ic" data-icon="lock"></span> <span class="vault-label">User Vault</span>
       </button>
       <a class="icon-btn" href="profile.html" title="Your profile" aria-label="Your profile">
         <span class="ic" data-icon="user"></span>
@@ -47,6 +50,11 @@
           <span class="ic" data-icon="book-open"></span>
           <span class="nav-label">All items</span>
           <span class="nav-count" data-count="all">0</span>
+        </button>
+        <button class="nav-item" data-view="reels">
+          <span class="ic" data-icon="video"></span>
+          <span class="nav-label">Reels &amp; Videos</span>
+          <span class="nav-count" data-count="reels">0</span>
         </button>
         <button class="nav-item" data-view="docs">
           <span class="ic" data-icon="file-text"></span>
@@ -137,34 +145,69 @@
           Upload a <span class="link-accent">PDF</span> or image, jot a note, or save a link.
           You can also drop files anywhere on this page.
         </p>
-        <button class="btn btn-primary" id="addFirstBtn">
-          <span class="ic" data-icon="plus"></span> Add first item
-        </button>
+        <a class="btn btn-primary" href="index.html">
+          <span class="ic" data-icon="upload"></span> Go to the dump
+        </a>
       </div>
     </main>
   </div>
 
-  <!-- Add modal -->
-  <div class="modal-overlay" id="modalOverlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <!-- Add modal (direct add — no AI) -->
+  <div class="modal-overlay" id="addModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
       <div class="modal-head">
-        <h3 id="modalTitle">Add to your workspace</h3>
-        <button class="icon-btn" id="modalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+        <h3 id="addModalTitle">Add to your library</h3>
+        <button class="icon-btn" id="addModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
       </div>
-      <p class="modal-sub">Paste a link or note, or upload a file. We'll figure out where it goes.</p>
-      <div class="modal-field">
-        <input type="text" id="linkInput" class="modal-input"
-               placeholder="Paste a link or type a note, then press Enter…" autocomplete="off" />
-      </div>
-      <label class="modal-drop" id="modalDrop">
-        <input type="file" id="fileInput" multiple hidden
+      <p class="modal-sub">Add a link, note, or file straight to your library — no AI analysis, it's saved directly.</p>
+      <input type="text" id="addLinkInput" class="modal-input" placeholder="Paste a link or type a note, then press Enter…" autocomplete="off" />
+      <label class="modal-drop" id="addDrop">
+        <input type="file" id="addFileInput" multiple hidden
                accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
         <span class="ic" data-icon="upload"></span>
-        <span>Click to browse files, or drop them anywhere</span>
+        <span>Click to browse files &amp; PDFs, or drop them anywhere</span>
       </label>
       <div class="modal-actions">
-        <button class="btn btn-ghost" id="modalCancel">Cancel</button>
-        <button class="btn btn-primary" id="addLinkBtn">Add to workspace</button>
+        <button class="btn btn-ghost" id="addCancel">Cancel</button>
+        <button class="btn btn-primary" id="addSubmit">Add to library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attach modal (attach items to a reel) -->
+  <div class="modal-overlay" id="attachModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="attachModalTitle">
+      <div class="modal-head">
+        <h3 id="attachModalTitle">Attach to this reel</h3>
+        <button class="icon-btn" id="attachModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="attachModalSub">Attach a PDF, link, doc or screenshot — it's kept with this reel.</p>
+      <input type="text" id="attachLinkInput" class="modal-input" placeholder="Paste a link, then press Enter…" autocomplete="off" />
+      <label class="modal-drop" id="attachDrop">
+        <input type="file" id="attachFileInput" multiple hidden
+               accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+        <span class="ic" data-icon="upload"></span>
+        <span>Click to browse files &amp; PDFs</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="attachCancel">Cancel</button>
+        <button class="btn btn-primary" id="attachSubmit">Attach</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Note modal -->
+  <div class="modal-overlay" id="noteModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+      <div class="modal-head">
+        <h3 id="noteModalTitle">Your note</h3>
+        <button class="icon-btn" id="noteModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="noteModalSub">Jot down anything about this item.</p>
+      <textarea id="noteInput" class="modal-input note-textarea" rows="5" placeholder="Type your note…"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="noteClear">Clear note</button>
+        <button class="btn btn-primary" id="noteSave">Save note</button>
       </div>
     </div>
   </div>
@@ -190,9 +233,12 @@
   <div class="drop-overlay" id="dropOverlay">
     <div class="drop-overlay-inner">
       <span class="ic" data-icon="upload"></span>
-      <p>Drop to add to your workspace</p>
+      <p>Drop to add to your library</p>
     </div>
   </div>
+
+  <!-- Hidden cover-image picker -->
+  <input type="file" id="coverInput" accept="image/*" hidden />
 
   <!-- Toast -->
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

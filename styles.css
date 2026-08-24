@@ -73,6 +73,9 @@ body {
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
 .btn-ghost:hover { background: var(--panel-soft); }
+.btn-secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); }
+.btn-secondary:hover { background: var(--panel-soft); border-color: var(--terra); }
+.btn-secondary .ic { color: var(--terra); }
 
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -491,12 +494,37 @@ body {
 /* Hero (dump zone) */
 .dump-hero { max-width: 760px; margin: 0 auto; text-align: center; padding: 56px 24px 20px; }
 .dump-hero .lp-title { font-size: clamp(2.6rem, 7vw, 4.4rem); margin-bottom: 18px; }
-.dump-hero .lp-sub { margin: 0 auto 34px; }
-.dump-hero .dropzone { text-align: center; max-width: 620px; margin: 0 auto 14px; }
-.dropzone-icon { color: var(--terra); }
-.dropzone-icon svg { width: 30px; height: 30px; }
-.dump-hero .paste-row { max-width: 620px; margin: 0 auto; }
-.dump-hero .link-input { background: var(--panel); }
+.dump-hero .lp-sub { margin: 0 auto 30px; }
+
+/* Primary action — paste a link (highlighted) */
+.paste-primary {
+  display: flex; align-items: center; gap: 10px;
+  max-width: 640px; margin: 0 auto; padding: 7px 7px 7px 16px;
+  background: var(--panel); border: 2px solid var(--terra); border-radius: 16px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--terra) 14%, transparent), var(--shadow);
+  transition: box-shadow 0.2s var(--ease);
+}
+.paste-primary:focus-within { box-shadow: 0 0 0 4px color-mix(in srgb, var(--terra) 22%, transparent), var(--shadow); }
+.paste-primary-ic { color: var(--terra); flex-shrink: 0; display: inline-flex; }
+.paste-primary-ic svg { width: 20px; height: 20px; }
+.link-input-lg { flex: 1; min-width: 0; border: none; background: transparent; padding: 12px 2px; font-size: 16px; font-family: inherit; color: var(--ink); }
+.link-input-lg::placeholder { color: var(--muted); }
+.link-input-lg:focus { outline: none; box-shadow: none; }
+.paste-primary .btn-lg { flex-shrink: 0; padding: 12px 22px; font-size: 15px; border-radius: 11px; }
+
+/* Secondary action — browse files / folder */
+.secondary-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 16px auto 0; font-size: 14px; }
+.linklike { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-weight: 550; cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: color 0.18s var(--ease), background 0.18s var(--ease); }
+.linklike:hover { color: var(--ink); background: var(--panel-soft); }
+.linklike svg { width: 15px; height: 15px; color: var(--terra); }
+.dot-sep { color: var(--line-2); }
+.muted-hint { color: var(--muted); }
+
+@media (max-width: 560px) {
+  .paste-primary { flex-wrap: wrap; padding: 12px; }
+  .link-input-lg { width: 100%; padding: 6px 2px; }
+  .paste-primary .btn-lg { width: 100%; }
+}
 
 /* Staging area */
 .staging { max-width: 1160px; margin: 40px auto 0; padding: 0 24px 90px; }
@@ -726,3 +754,155 @@ body {
 .btn-danger svg { width: 15px; height: 15px; }
 
 @media (max-width: 760px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } .profile-grid { grid-template-columns: 1fr; } }
+
+
+/* ============================================================
+   PDF inline preview (dump cards + library cards)
+   ============================================================ */
+.item-thumb.pdf, .dcard-thumb.pdf { background: #fff; }
+.pdf-frame { width: 100%; height: 100%; border: 0; pointer-events: none; background: #fff; }
+.dcard-thumb.pdf { aspect-ratio: 16 / 11; }
+
+
+/* ============================================================
+   Per-item notes + clickable cards
+   ============================================================ */
+.note-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: inherit; font-size: 13px; font-weight: 550; color: var(--ink-2); padding: 8px 10px; border-radius: 9px; background: var(--panel-soft); border: 1px solid var(--line); cursor: pointer; transition: color 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease); }
+.note-btn svg { width: 14px; height: 14px; }
+.note-btn:hover { background: var(--active); color: var(--ink); }
+.note-btn.has-note { color: var(--primary); background: var(--terra-soft); border-color: var(--active-line); }
+
+.item-note-snippet { display: flex; gap: 6px; align-items: flex-start; margin: 8px 0 0; padding: 8px 10px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 9px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; word-break: break-word; }
+.item-note-snippet .ic { flex-shrink: 0; }
+.item-note-snippet .ic svg { width: 13px; height: 13px; color: var(--terra); margin-top: 1px; }
+
+.note-textarea { width: 100%; resize: vertical; min-height: 110px; font-family: inherit; font-size: 14px; line-height: 1.5; }
+
+/* Clickable cards */
+.item-card.is-openable .item-thumb, .item-card.is-openable .item-info { cursor: pointer; }
+.item-card.is-openable:hover .item-title { color: var(--primary); }
+.dcard.is-openable .dcard-thumb, .dcard.is-openable .dcard-info { cursor: pointer; }
+.dcard.is-openable:hover .dcard-title { color: var(--primary); }
+
+/* ============================================================
+   MOBILE OPTIMIZATION
+   ============================================================ */
+@media (max-width: 900px) {
+  .nav-heading { width: 100%; margin-top: 14px; }
+  .nav-sections { flex-direction: row; flex-wrap: wrap; width: 100%; }
+  .nav-subitem { padding-left: 12px; }
+}
+@media (max-width: 720px) {
+  /* Library top bar wraps; search drops to its own full-width row */
+  .topbar { flex-wrap: wrap; height: auto; padding: 10px 14px; gap: 10px; }
+  .search { order: 3; flex-basis: 100%; max-width: none; margin: 0; }
+  .topbar-actions { margin-left: auto; }
+  .vault-label { display: none; }
+  #vaultBtn { padding: 9px 12px; }
+
+  /* Header controls stack full width */
+  .main-head-left, .main-head-right { width: 100%; }
+  .main-head-right { justify-content: space-between; }
+  .segmented { width: 100%; }
+  .seg { flex: 1; text-align: center; }
+  #newSectionBtn { flex: 1; justify-content: center; }
+
+  .item-controls { flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  /* Dump page + landing nav wrap */
+  .lp-nav { flex-wrap: wrap; gap: 10px; padding: 16px; }
+  .lp-nav-actions, .auth-area { flex-wrap: wrap; gap: 8px; }
+  .nav-greet { padding: 6px 4px; }
+
+  .section { padding-left: 18px; padding-right: 18px; }
+  .modal { padding: 20px; }
+  .btn, .seg, .nav-item, .pin-btn, .note-btn { min-height: 40px; }
+  .sec-select { min-height: 40px; }
+}
+@media (max-width: 420px) {
+  .grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .item-title { font-size: 13.5px; }
+  .item-actions, .item-controls { padding-left: 10px; padding-right: 10px; }
+}
+
+
+/* ============================================================
+   First-page / image previews (overlay on top of the type icon)
+   ============================================================ */
+.item-thumb .thumb-ic, .dcard-thumb .thumb-ic { position: relative; z-index: 0; }
+.thumb-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: top center; background: #fff; z-index: 1;
+  animation: fadeIn 0.3s var(--ease);
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.item-thumb .star-btn { z-index: 3; }
+.item-thumb .type-tag { z-index: 2; }
+.dcard-thumb { position: relative; }
+
+
+/* Dump staging card — pin + note controls */
+.dcard-controls { display: flex; gap: 6px; margin-bottom: 8px; }
+.dcard-controls > button { flex: 1; }
+.dcard-controls .pin-btn, .dcard-controls .note-btn { justify-content: center; padding: 7px 8px; font-size: 12px; }
+
+
+/* ============================================================
+   Custom cover image button (set your own preview)
+   ============================================================ */
+.cover-btn {
+  position: absolute; top: 9px; left: 9px; z-index: 4;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter: blur(4px);
+  border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+  transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.15s var(--ease);
+}
+.cover-btn svg { width: 15px; height: 15px; }
+.cover-btn:hover { color: var(--terra); background: var(--panel); transform: scale(1.08); }
+.cover-btn.armed { color: #fff; background: var(--terra); border-color: var(--terra); }
+
+/* Armed-for-cover-paste state */
+.item-thumb.cover-armed, .dcard-thumb.cover-armed { outline: 2px dashed var(--terra); outline-offset: -3px; }
+.cover-hint {
+  position: absolute; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: var(--terra); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 5px 11px; border-radius: 999px; box-shadow: var(--shadow); white-space: nowrap;
+  animation: fadeIn 0.2s var(--ease);
+}
+
+/* Move the library type-tag to the bottom-left so it doesn't clash with the cover button */
+.item-thumb .type-tag { top: auto; bottom: 9px; left: 9px; }
+
+
+/* Reels shelf tint (when a reel/video has no cover thumbnail) */
+.thumb-tint-reels { background: linear-gradient(135deg, #f0dcc233, #e7cbad33); }
+
+
+/* ============================================================
+   Reel attachments (PDFs / links / docs attached to a reel)
+   ============================================================ */
+.attachments { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.att-list { display: flex; flex-direction: column; gap: 6px; }
+.att-chip {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 7px 9px; border-radius: 9px; background: var(--panel-soft);
+  border: 1px solid var(--line); transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.att-chip:hover { background: var(--active); border-color: var(--active-line); }
+.att-chip > .ic { color: var(--terra); flex-shrink: 0; display: inline-flex; }
+.att-chip > .ic svg { width: 15px; height: 15px; }
+.att-title { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 550; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-del { flex-shrink: 0; width: 22px; height: 22px; border: none; background: transparent; color: var(--muted); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: color 0.15s var(--ease), background 0.15s var(--ease); }
+.att-del svg { width: 13px; height: 13px; }
+.att-del:hover { color: var(--primary); background: #f6e3dd; }
+.att-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 8px 10px; border-radius: 9px; cursor: pointer;
+  background: transparent; border: 1px dashed var(--line-2); color: var(--muted);
+  font-family: inherit; font-size: 12.5px; font-weight: 550;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.att-add:hover { color: var(--terra); border-color: var(--terra); background: var(--panel); }
+.att-add svg { width: 14px; height: 14px; }

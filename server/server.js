@@ -19,6 +19,21 @@ const MAX_BODY = 20 * 1024 * 1024;                 // 20 MB (files as base64)
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+/* ---------------- .env loader (dependency-free) ---------------- */
+(function loadEnv() {
+  for (const f of [path.join(ROOT, ".env"), path.join(__dirname, ".env")]) {
+    let txt;
+    try { txt = fs.readFileSync(f, "utf8"); } catch { continue; }
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (!m || line.trim().startsWith("#")) continue;
+      let v = m[2].trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+    }
+  }
+})();
+
 /* ---------------- Secret (persisted) ---------------- */
 const SECRET = (() => {
   if (process.env.DUMP_JWT_SECRET) return process.env.DUMP_JWT_SECRET;
@@ -81,6 +96,10 @@ function ensureColumn(table, col, def) {
 }
 ensureColumn("items", "pinned", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("items", "section_id", "TEXT");
+ensureColumn("items", "annotation", "TEXT");
+ensureColumn("items", "cover_data", "BLOB");
+ensureColumn("items", "cover_mime", "TEXT");
+ensureColumn("items", "parent_id", "TEXT");
 
 /* ---------------- Crypto helpers ---------------- */
 function hashPassword(pw) {
@@ -119,6 +138,19 @@ function verifyToken(token) {
 }
 function uid() { return crypto.randomBytes(9).toString("base64url"); }
 
+// Normalize a URL for duplicate detection (drop www, trailing slash, hash, tracking params).
+function normUrl(u) {
+  if (!u) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(u) ? u : "https://" + u);
+    url.hash = "";
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "igshid", "si", "usp"].forEach((p) => url.searchParams.delete(p));
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    const path = url.pathname.replace(/\/+$/, "");
+    return host + path + (url.search || "");
+  } catch { return (u || "").trim(); }
+}
+
 /* ---------------- HTTP helpers ---------------- */
 function send(res, status, obj, headers = {}) {
   const body = JSON.stringify(obj);
@@ -152,15 +184,189 @@ function authUser(req, url) {
 function publicUser(u) { return { id: u.id, name: u.name, email: u.email, createdAt: u.created_at }; }
 function issueToken(userId) { return signToken({ uid: userId, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 }); }
 
+// Fetch a remote PDF (with timeout + size cap) so it can be stored locally.
+async function fetchRemotePdf(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const r = await fetch(url, { signal: controller.signal, redirect: "follow", headers: { "User-Agent": "DumpBot/1.0" } });
+    if (!r.ok) return null;
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("pdf") && !/\.pdf(\?|#|$)/i.test(url)) return null;
+    const ab = await r.arrayBuffer();
+    if (ab.byteLength === 0 || ab.byteLength > 25 * 1024 * 1024) return null;
+    let name = "document.pdf";
+    try { name = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || "document.pdf"); } catch {}
+    if (!/\.pdf$/i.test(name)) name += ".pdf";
+    return { buf: Buffer.from(ab), name };
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
+// Fetch a page's Open Graph cover image (first frame for reels/videos, hero for links).
+async function fetchOgImage(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal, redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; DumpBot/1.0; +https://dump.app)",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+    });
+    if (!r.ok) return null;
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("html")) return null;
+
+    // Read only the first ~600 KB (og tags live in <head>).
+    let html = "", received = 0;
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.length;
+      html += dec.decode(value, { stream: true });
+      if (received > 600 * 1024 || /<\/head>/i.test(html)) { try { await reader.cancel(); } catch {} break; }
+    }
+
+    const m =
+      html.match(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:image(?::secure_url)?["']/i) ||
+      html.match(/<meta[^>]+(?:property|name)=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
+    if (!m) return null;
+    let img = m[1].replace(/&amp;/g, "&").trim();
+    try { img = new URL(img, r.url || url).href; } catch {}
+    return img || null;
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
+/* ---------------- AI (Groq) + OCR — server-side ---------------- */
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_TEXT_MODEL = process.env.GROQ_TEXT_MODEL || "openai/gpt-oss-120b";
+const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-maverick-17b-128e-instruct";
+const OCR_API_KEY = process.env.OCR_API_KEY || "";
+const OCR_URL = process.env.OCR_URL || "https://api.ocr.space/parse/image";
+
+async function withTimeout(factory, ms) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  try { return await factory(c.signal); } finally { clearTimeout(t); }
+}
+
+async function groqChat(model, messages, maxTokens = 16) {
+  if (!GROQ_API_KEY) return "";
+  const r = await withTimeout((signal) => fetch(GROQ_URL, {
+    method: "POST", signal,
+    headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, messages, temperature: 0, max_tokens: maxTokens }),
+  }), 12000);
+  if (!r.ok) throw new Error("Groq HTTP " + r.status);
+  const data = await r.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
+function normalizeSection(text) {
+  const t = (text || "").toLowerCase();
+  if (t.includes("reel") || t.includes("video")) return "reels";
+  if (t.includes("pdf") || t.includes("doc")) return "pdfs";
+  if (t.includes("screenshot") || t.includes("image") || t.includes("photo")) return "screenshots";
+  if (t.includes("link") || t.includes("note") || t.includes("article")) return "links";
+  return null;
+}
+const CLASSIFY_SYSTEM =
+  "You are a strict classifier. Reply with ONLY one word — reels, pdfs, links, or screenshots. " +
+  "reels = short videos/reels (Instagram, TikTok, YouTube). pdfs = PDFs/documents. " +
+  "links = general web links, articles, notes. screenshots = images/photos.";
+
+async function classifyText({ url, title, note }) {
+  if (!GROQ_API_KEY) return null;
+  try {
+    const content = url || note || title || "";
+    if (!content) return null;
+    return normalizeSection(await groqChat(GROQ_TEXT_MODEL, [
+      { role: "system", content: CLASSIFY_SYSTEM },
+      { role: "user", content: `Classify this item: ${content}` },
+    ], 8));
+  } catch (e) { console.warn("classifyText failed:", e.message); return null; }
+}
+
+async function ocrViaOcrSpace(buf, mime) {
+  // OCR.space free tier caps uploads at ~1 MB; warn but still try.
+  if (buf.length > 1024 * 1024) console.warn(`OCR.space: image is ${(buf.length / 1048576).toFixed(1)} MB (free tier limit ~1 MB).`);
+  const body = new URLSearchParams();
+  body.set("base64Image", `data:${mime || "image/png"};base64,${buf.toString("base64")}`);
+  body.set("language", "eng");
+  body.set("OCREngine", "2");
+  body.set("scale", "true");
+  body.set("isOverlayRequired", "false");
+  body.set("detectOrientation", "true");
+  const r = await withTimeout((signal) => fetch(OCR_URL, {
+    method: "POST", signal,
+    headers: { apikey: OCR_API_KEY, "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  }), 15000);
+  if (!r.ok) throw new Error("OCR HTTP " + r.status);
+  const data = await r.json();
+  if (data.IsErroredOnProcessing) {
+    const msg = Array.isArray(data.ErrorMessage) ? data.ErrorMessage.join("; ") : (data.ErrorMessage || "unknown error");
+    throw new Error("OCR.space: " + msg);
+  }
+  const text = (data.ParsedResults || []).map((p) => p.ParsedText || "").join("\n").trim();
+  console.log(`OCR.space read ${text.length} chars from screenshot.`);
+  return text;
+}
+
+async function ocrViaGroqVision(buf, mime) {
+  const dataUrl = `data:${mime || "image/png"};base64,${buf.toString("base64")}`;
+  return await groqChat(GROQ_VISION_MODEL, [
+    { role: "user", content: [
+      { type: "text", text: "Extract ALL text visible in this image, especially any URLs or links. Return only the raw extracted text, nothing else." },
+      { type: "image_url", image_url: { url: dataUrl } },
+    ] },
+  ], 512);
+}
+
+async function ocrImageBuffer(buf, mime) {
+  if (OCR_API_KEY) { try { return await ocrViaOcrSpace(buf, mime); } catch (e) { console.warn("OCR.space failed:", e.message); } }
+  if (GROQ_API_KEY) { try { return await ocrViaGroqVision(buf, mime); } catch (e) { console.warn("Groq OCR failed:", e.message); } }
+  return "";
+}
+
+const COMMON_TLDS = new Set("com,org,net,io,co,ai,dev,app,me,gov,edu,in,uk,us,ca,au,de,fr,jp,so,site,xyz,tech,info,news,tv".split(","));
+function extractUrls(text) {
+  if (!text) return [];
+  const re = /((https?:\/\/)?(www\.)?[a-z0-9][a-z0-9-]*(\.[a-z0-9-]+)+(\/[^\s"'<>)\]]*)?)/gi;
+  const out = new Set();
+  for (const m of text.matchAll(re)) {
+    let u = m[0].trim().replace(/[.,);\]]+$/, "");
+    const hasProto = /^https?:\/\//i.test(u);
+    const hasWww = /^www\./i.test(u);
+    const hasPath = u.includes("/");
+    const tld = (u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0].split(".").pop() || "").toLowerCase();
+    if (!hasProto && !hasWww && !hasPath && !COMMON_TLDS.has(tld)) continue;
+    if (!hasProto) u = "https://" + u;
+    out.add(u);
+    if (out.size >= 10) break;
+  }
+  return [...out];
+}
+
 function rowToItem(r) {
   return {
     id: r.id, kind: r.kind, category: r.category, section: r.section,
     title: r.title, subtitle: r.subtitle, url: r.url, note: r.note,
     thumbnail: r.thumbnail, mime: r.mime,
     approved: !!r.approved, starred: !!r.starred, pinned: !!r.pinned,
-    sectionId: r.section_id || null, createdAt: r.created_at,
+    sectionId: r.section_id || null, annotation: r.annotation || "", createdAt: r.created_at,
     hasFile: !!r.file_name,
     fileUrl: r.file_name ? `/api/files/${r.id}` : null,
+    hasCover: !!r.cover_mime,
+    coverUrl: r.cover_mime ? `/api/covers/${r.id}` : null,
+    parentId: r.parent_id || null,
   };
 }
 
@@ -170,6 +376,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function handleApi(req, res, url) {
   const p = url.pathname;
   const method = req.method;
+
+  // --- Public capability flags (no secrets) — confirm what's wired ---
+  if (p === "/api/config" && method === "GET") {
+    return send(res, 200, {
+      aiClassify: !!GROQ_API_KEY,
+      ocr: OCR_API_KEY ? "ocr.space" : (GROQ_API_KEY ? "groq-vision" : "off"),
+    });
+  }
 
   // --- Auth ---
   if (p === "/api/auth/signup" && method === "POST") {
@@ -323,7 +537,59 @@ async function handleApi(req, res, url) {
     return res.end(Buffer.from(row.file_data));
   }
 
+  // --- Custom cover image serving ---
+  const coverMatch = p.match(/^\/api\/covers\/([\w-]+)$/);
+  if (coverMatch && method === "GET") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const row = db.prepare("SELECT cover_mime, cover_data FROM items WHERE id = ? AND user_id = ?").get(coverMatch[1], user.id);
+    if (!row || !row.cover_data) return send(res, 404, { error: "Not found" });
+    res.writeHead(200, { "Content-Type": row.cover_mime || "image/png", "Cache-Control": "private, max-age=3600" });
+    return res.end(Buffer.from(row.cover_data));
+  }
+
+  // --- Set a custom cover image on any item ---
+  const coverSetMatch = p.match(/^\/api\/items\/([\w-]+)\/cover$/);
+  if (coverSetMatch && method === "POST") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const row = db.prepare("SELECT id FROM items WHERE id = ? AND user_id = ?").get(coverSetMatch[1], user.id);
+    if (!row) return send(res, 404, { error: "Not found" });
+    const b = await readJson(req);
+    if (!b.fileData) return send(res, 400, { error: "No image provided." });
+    const mimeMatch = /^data:([^;]+);base64,/.exec(String(b.fileData));
+    const cmime = (mimeMatch && mimeMatch[1]) || b.mime || "image/png";
+    if (!cmime.startsWith("image/")) return send(res, 400, { error: "Cover must be an image." });
+    const buf = Buffer.from(String(b.fileData).replace(/^data:[^;]+;base64,/, ""), "base64");
+    if (!buf.length) return send(res, 400, { error: "Empty image." });
+    db.prepare("UPDATE items SET cover_data = ?, cover_mime = ? WHERE id = ? AND user_id = ?").run(buf, cmime, coverSetMatch[1], user.id);
+    return send(res, 200, { item: rowToItem(db.prepare("SELECT * FROM items WHERE id = ?").get(coverSetMatch[1])) });
+  }
+
   // --- Items (all protected) ---
+  // --- Remove duplicate items (same normalized URL) — keeps the best copy ---
+  if (p === "/api/items/dedupe" && method === "POST") {
+    const user = authUser(req, url);
+    if (!user) return send(res, 401, { error: "Not authenticated" });
+    const rows = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL ORDER BY created_at ASC").all(user.id);
+    const groups = new Map();
+    for (const r of rows) {
+      const nk = normUrl(r.url); if (!nk) continue;
+      const k = (r.parent_id || "") + "|" + nk; // dedupe within the same container
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    const score = (r) => (r.approved ? 8 : 0) + (r.cover_mime ? 4 : 0) + ((r.annotation && r.annotation.trim()) ? 2 : 0) + (r.pinned ? 1 : 0) + (r.starred ? 1 : 0);
+    const del = db.prepare("DELETE FROM items WHERE id = ? AND user_id = ?");
+    let removed = 0;
+    for (const [, arr] of groups) {
+      if (arr.length < 2) continue;
+      arr.sort((a, b) => score(b) - score(a) || a.created_at - b.created_at); // keep highest score, then oldest
+      for (const r of arr.slice(1)) { del.run(r.id, user.id); removed++; }
+    }
+    return send(res, 200, { removed });
+  }
+
   if (p === "/api/items" && method === "GET") {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
@@ -341,6 +607,16 @@ async function handleApi(req, res, url) {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
     const b = await readJson(req);
+
+    // De-duplicate: if this URL already exists for the user, return the existing item.
+    if (b.url) {
+      const nu = normUrl(b.url);
+      const pid = b.parent_id || null;
+      const dup = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL").all(user.id)
+        .find((r) => (r.parent_id || null) === pid && normUrl(r.url) === nu);
+      if (dup) return send(res, 200, { item: rowToItem(dup), duplicate: true, ocrUrls: [] });
+    }
+
     const id = uid();
     let fileBuf = null, mime = b.mime || null, fileName = null;
     if (b.fileData) {
@@ -348,16 +624,50 @@ async function handleApi(req, res, url) {
       fileBuf = Buffer.from(base64, "base64");
       fileName = b.fileName || b.title || "file";
     }
+    // Auto-capture PDF links: fetch the file server-side so it's stored & previewable.
+    if (!fileBuf && b.url && /\.pdf(\?|#|$)/i.test(b.url)) {
+      const pdf = await fetchRemotePdf(b.url);
+      if (pdf) { fileBuf = pdf.buf; mime = "application/pdf"; fileName = pdf.name; }
+    }
+
+    const isImage = (mime || "").startsWith("image/");
+
+    // Server-side AI classification + cover-image (first frame) fetch — in parallel.
+    let section = b.section || null;
+    let thumbnail = b.thumbnail || null;
+    if (b.analyze !== false && !isImage && !fileBuf && (b.url || b.note || b.title)) {
+      const needCover = b.url && !thumbnail && ["reel", "video", "link"].includes(b.category);
+      const [c, og] = await Promise.all([
+        classifyText({ url: b.url, title: b.title, note: b.note }),
+        needCover ? fetchOgImage(b.url) : Promise.resolve(null),
+      ]);
+      if (c) section = c;
+      if (og) thumbnail = og;
+    }
+
+    // Validate an optional parent (attaching to a reel/container).
+    let parentId = null;
+    if (b.parent_id) {
+      const par = db.prepare("SELECT id FROM items WHERE id = ? AND user_id = ?").get(b.parent_id, user.id);
+      if (par) parentId = b.parent_id;
+    }
+
     db.prepare(`INSERT INTO items
-      (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      id, user.id, b.kind || null, b.category || null, b.section || null,
+      (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, parent_id, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      id, user.id, b.kind || null, b.category || null, section,
       b.title || null, b.subtitle || null, b.url || null, b.note || null,
-      b.thumbnail || null, mime, fileName, fileBuf,
-      b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, Date.now()
+      thumbnail, mime, fileName, fileBuf,
+      b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, parentId, Date.now()
     );
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
-    return send(res, 201, { item: rowToItem(row) });
+
+    // OCR screenshots: extract any links found inside the image (skipped for direct adds).
+    let ocrUrls = [];
+    if (b.analyze !== false && isImage && fileBuf) {
+      try { ocrUrls = extractUrls(await ocrImageBuffer(fileBuf, mime)); } catch {}
+    }
+    return send(res, 201, { item: rowToItem(row), ocrUrls });
   }
 
   const itemMatch = p.match(/^\/api\/items\/([\w-]+)$/);
@@ -372,12 +682,20 @@ async function handleApi(req, res, url) {
     if (typeof b.approved === "boolean") { sets.push("approved = ?"); vals.push(b.approved ? 1 : 0); }
     if (typeof b.starred === "boolean") { sets.push("starred = ?"); vals.push(b.starred ? 1 : 0); }
     if (typeof b.pinned === "boolean") { sets.push("pinned = ?"); vals.push(b.pinned ? 1 : 0); }
+    if (typeof b.annotation === "string") { sets.push("annotation = ?"); vals.push(b.annotation); }
     if ("section_id" in b) {
       if (b.section_id) {
         const s = db.prepare("SELECT id FROM sections WHERE id = ? AND user_id = ?").get(b.section_id, user.id);
         if (!s) return send(res, 400, { error: "Unknown section" });
         sets.push("section_id = ?"); vals.push(b.section_id);
       } else { sets.push("section_id = ?"); vals.push(null); }
+    }
+    if ("parent_id" in b) {
+      if (b.parent_id) {
+        const par = db.prepare("SELECT id FROM items WHERE id = ? AND user_id = ?").get(b.parent_id, user.id);
+        if (!par) return send(res, 400, { error: "Unknown parent" });
+        sets.push("parent_id = ?"); vals.push(b.parent_id);
+      } else { sets.push("parent_id = ?"); vals.push(null); }
     }
     if (typeof b.title === "string") { sets.push("title = ?"); vals.push(b.title); }
     if (!sets.length) return send(res, 400, { error: "Nothing to update" });
@@ -389,7 +707,8 @@ async function handleApi(req, res, url) {
   if (itemMatch && method === "DELETE") {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
-    db.prepare("DELETE FROM items WHERE id = ? AND user_id = ?").run(itemMatch[1], user.id);
+    // Delete the item and any attachments it holds (attachments live with their reel).
+    db.prepare("DELETE FROM items WHERE (id = ? OR parent_id = ?) AND user_id = ?").run(itemMatch[1], itemMatch[1], user.id);
     return send(res, 200, { ok: true });
   }
 
@@ -432,4 +751,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`Dump server running at http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Dump server running at http://localhost:${PORT}`);
+  console.log(`  AI classification: ${GROQ_API_KEY ? "Groq (" + GROQ_TEXT_MODEL + ")" : "rule-based (no GROQ_API_KEY)"}`);
+  console.log(`  Screenshot OCR:    ${OCR_API_KEY ? "OCR.space (key detected)" : (GROQ_API_KEY ? "Groq vision fallback" : "disabled (set OCR_API_KEY)")}`);
+});
