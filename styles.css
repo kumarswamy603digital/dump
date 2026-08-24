@@ -906,3 +906,159 @@ body {
 }
 .att-add:hover { color: var(--terra); border-color: var(--terra); background: var(--panel); }
 .att-add svg { width: 14px; height: 14px; }
+
+
+/* ============================================================
+   Whiteboard thumbnail (reels): button + modal
+   ============================================================ */
+.wb-btn {
+  position: absolute; top: 9px; right: 9px; z-index: 4;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter: blur(4px);
+  border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+  transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.15s var(--ease);
+}
+.wb-btn svg { width: 15px; height: 15px; }
+.wb-btn:hover { color: var(--terra); background: var(--panel); transform: scale(1.08); }
+/* In the library, the star sits top-right — drop the whiteboard button just below it */
+.item-thumb .wb-btn { top: 47px; }
+
+.wb-modal { max-width: 520px; }
+.wb-canvas { width: 100%; aspect-ratio: 16 / 10; border: 1px solid var(--line-2); border-radius: 12px; display: block; margin-bottom: 12px; background: #fff; }
+.wb-text { width: 100%; resize: vertical; min-height: 56px; font-family: inherit; font-size: 14px; }
+.wb-swatches { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.wb-swatch { width: 42px; height: 34px; border-radius: 9px; border: 2px solid var(--line-2); cursor: pointer; font-family: var(--serif); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease); }
+.wb-swatch.active { border-color: var(--terra); box-shadow: 0 0 0 2px color-mix(in srgb, var(--terra) 30%, transparent); }
+
+
+
+/* ============================================================
+   RESPONSIVE POLISH — comfortable on phones AND laptops
+   Consolidated, authoritative overrides. Kept at the end so
+   these win where they overlap earlier rules. Desktop is
+   untouched (all changes live inside mobile media queries or
+   are safe no-ops on large screens).
+   ============================================================ */
+
+/* Never let a stray wide element cause horizontal scroll/jitter.
+   `clip` (not `hidden`) so the sticky top bar keeps sticking. */
+html, body { overflow-x: clip; }
+img, canvas, video, iframe { max-width: 100%; }
+
+/* Snappier touch: kill the 300ms delay, the grey tap flash, and
+   accidental double-tap zoom on interactive controls. */
+a, button, .btn, .nav-item, .seg, .icon-btn, .pin-btn, .note-btn,
+.linklike, .att-chip, .att-add, .att-del, .wb-swatch, label.file-pick,
+.star-btn, .cover-btn, .wb-btn, .dcard-del, .item-open, .item-del {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Modals never grow past the screen — they scroll inside instead,
+   so the action buttons are always reachable. (Safe on desktop.) */
+.modal {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Keep the toast above the home-indicator / gesture bar. */
+.toast { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+
+/* ---------- Tablets & large phones ---------- */
+@media (max-width: 720px) {
+  /* Breathing room around notches for the sticky/nav bars. */
+  .topbar {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  .lp-nav {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+/* ---------- Phones ---------- */
+@media (max-width: 640px) {
+  /* Stop iOS Safari from zooming the page whenever a field is
+     focused — any control below 16px triggers that zoom. */
+  input, select, textarea,
+  .search-input, .link-input, .link-input-lg, .modal-input, .auth-input,
+  .select, .dcard-select, .sec-select {
+    font-size: 16px;
+  }
+
+  /* Thumb-friendly tap targets for the little overlay buttons. */
+  .star-btn, .cover-btn, .wb-btn { width: 36px; height: 36px; }
+  .item-thumb .wb-btn { top: 52px; }           /* sit just under the star */
+  .dcard-del, .att-del, .section-card-del { width: 32px; height: 32px; }
+  .att-del svg { width: 15px; height: 15px; }
+
+  /* No hover on touch → keep the section delete always visible. */
+  .section-card-del { opacity: 1; }
+
+  /* Modal buttons stack full-width (primary on top) for easy tapping. */
+  .modal-actions { flex-direction: column-reverse; gap: 10px; }
+  .modal-actions .btn { width: 100%; }
+
+  /* Tall modals open from the top and scroll with the page. */
+  .modal-overlay { align-items: flex-start; padding: 14px; overflow-y: auto; }
+
+  /* A touch more room for content on the dump page. */
+  .dump-hero { padding-top: 40px; }
+}
+
+/* ---------- Small phones: one comfortable column ---------- */
+@media (max-width: 560px) {
+  /* Library cards go full-width so every control (open / note /
+     delete / pin / section) is big and easy to hit. */
+  .grid { grid-template-columns: 1fr; gap: 14px; }
+  .item-thumb { aspect-ratio: 16 / 9; }
+
+  /* Section manager cards: one per row. */
+  .sections-grid { grid-template-columns: 1fr; }
+}
+
+
+
+/* ============================================================
+   Reels: per-reel approval checkbox + "approve to a section"
+   ============================================================ */
+
+/* Toolbar above the reels shelf (Select all · Approve N) */
+.reels-selbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 2px 2px 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--line-2);
+  flex-wrap: wrap;
+}
+.reels-selall { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 550; color: var(--ink-2); cursor: pointer; user-select: none; }
+.reels-selall input { width: 17px; height: 17px; accent-color: var(--primary); cursor: pointer; }
+.reels-selbar .btn-sm { padding: 8px 14px; }
+.reels-selbar .btn-sm .ic svg { width: 15px; height: 15px; }
+.reels-selbar .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The tick box at the top-left of each reel card */
+.dcard-check { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 3px; margin-right: auto; }
+.dcard-check input { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+.dcard.selected { border-color: var(--terra); box-shadow: 0 0 0 2px color-mix(in srgb, var(--terra) 32%, transparent); }
+
+/* Section picker (inside the approve-reels modal) */
+.reel-sec-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 2px; max-height: 46vh; overflow-y: auto; }
+.reel-sec-opt, .reel-sec-newbtn {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 11px 13px; border-radius: 11px; border: 1px solid var(--line-2);
+  background: var(--panel); color: var(--ink-2); font-family: inherit; font-size: 14px; font-weight: 550;
+  cursor: pointer; transition: border-color 0.15s var(--ease), background 0.15s var(--ease), color 0.15s var(--ease);
+}
+.reel-sec-opt .ic, .reel-sec-newbtn .ic { color: var(--terra); flex-shrink: 0; display: inline-flex; }
+.reel-sec-opt .ic svg, .reel-sec-newbtn .ic svg { width: 17px; height: 17px; }
+.reel-sec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reel-sec-count { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
+.reel-sec-opt:hover, .reel-sec-newbtn:hover { border-color: var(--terra); background: var(--panel-soft); color: var(--ink); }
+.reel-sec-opt.active { border-color: var(--terra); background: var(--terra-soft); color: var(--ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--terra) 22%, transparent); }
+.reel-sec-newbtn { border-style: dashed; color: var(--muted); }
+.reel-sec-newbtn.active { border-color: var(--terra); color: var(--ink-2); }
+.reel-sec-empty { color: var(--muted); font-size: 13.5px; text-align: center; padding: 12px 8px; margin: 0; }
+.reel-sec-newwrap { margin-top: 10px; }

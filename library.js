@@ -172,7 +172,8 @@ function thumbFor(item) {
   }
   const coverTitle = item.hasCover ? "Replace cover — click, then Ctrl+V" : "Add cover — click, then Ctrl+V";
   const armed = item.id === pendingCoverId;
-  return `<div class="item-thumb ${tint} ${armed ? "cover-armed" : ""}">${starBtn(item)}<button class="cover-btn ${armed ? "armed" : ""}" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}${armed ? '<span class="cover-hint">Press Ctrl+V</span>' : ""}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
+  const wb = (item.category === "reel" || item.category === "video") ? `<button class="wb-btn" data-wb-open="${item.id}" title="Whiteboard thumbnail">${ICONS.type}</button>` : "";
+  return `<div class="item-thumb ${tint} ${armed ? "cover-armed" : ""}">${starBtn(item)}${wb}<button class="cover-btn ${armed ? "armed" : ""}" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}${armed ? '<span class="cover-hint">Press Ctrl+V</span>' : ""}<span class="type-tag">${ICONS[meta.icon]} ${meta.label}</span></div>`;
 }
 function sectionSelect(item) {
   const opts = ['<option value="">No section</option>']
@@ -469,6 +470,45 @@ async function attachFiles(fileList) {
 }
 function submitAttach() { if (attachLinkInput.value.trim()) { attachLink(attachLinkInput.value); closeAttachModal(); } }
 
+/* ---------------- Whiteboard thumbnail (reels) ---------------- */
+let wbTargetId = null, wbTheme = WB_THEMES[0];
+const wbModal = $("#wbModal");
+const wbCanvas = $("#wbCanvas");
+const wbText = $("#wbText");
+const wbSwatches = $("#wbSwatches");
+function wbBuildSwatches() {
+  wbSwatches.innerHTML = WB_THEMES.map((t, i) =>
+    `<button class="wb-swatch ${t === wbTheme ? "active" : ""}" data-wb="${i}" style="background:${t.bg};color:${t.fg}">Aa</button>`).join("");
+}
+function wbRefresh() { renderWhiteboard(wbCanvas, wbText.value, wbTheme); }
+function openWhiteboard(id) {
+  wbTargetId = id; wbText.value = ""; wbTheme = WB_THEMES[0];
+  wbBuildSwatches(); wbModal.hidden = false; wbRefresh();
+  setTimeout(() => wbText.focus(), 40);
+}
+function closeWhiteboard() { wbModal.hidden = true; wbTargetId = null; }
+wbText.addEventListener("input", wbRefresh);
+wbSwatches.addEventListener("click", (e) => { const b = e.target.closest("[data-wb]"); if (!b) return; wbTheme = WB_THEMES[+b.dataset.wb]; wbBuildSwatches(); wbRefresh(); });
+$("#wbClose").addEventListener("click", closeWhiteboard);
+$("#wbCancel").addEventListener("click", closeWhiteboard);
+wbModal.addEventListener("click", (e) => { if (e.target === wbModal) closeWhiteboard(); });
+$("#wbApply").addEventListener("click", async () => {
+  const id = wbTargetId;
+  if (!id) return;
+  if (!wbText.value.trim()) { toast("Write some text first"); return; }
+  const blob = await whiteboardBlob(wbCanvas);
+  const file = new File([blob], "whiteboard.png", { type: "image/png" });
+  closeWhiteboard();
+  toast("Setting thumbnail…");
+  try {
+    const updated = await Items.setCover(id, file);
+    const it = items.find((x) => x.id === id);
+    if (it) { it.hasCover = true; it.coverUrl = updated.coverUrl; }
+    render();
+    toast("Thumbnail set");
+  } catch (e) { toast(e.message); }
+});
+
 /* ---------------- Wiring ---------------- */
 $("#newSectionBtn").addEventListener("click", openSectionModal);
 $("#attachModalClose").addEventListener("click", closeAttachModal);
@@ -521,6 +561,7 @@ mainEl.addEventListener("click", (e) => {
   const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
   const openAtt = e.target.closest("[data-open-att]"); if (openAtt) return openItem(openAtt.getAttribute("data-open-att"));
   const attach = e.target.closest("[data-attach]"); if (attach) return openAttachModal(attach.getAttribute("data-attach"));
+  const wbOpen = e.target.closest("[data-wb-open]"); if (wbOpen) return openWhiteboard(wbOpen.getAttribute("data-wb-open"));
   // Click the card body -> open the item (reel / link / file)
   const card = e.target.closest(".item-card.is-openable");
   if (card && !e.target.closest("button, select, a, .item-actions, .item-controls, .attachments")) openItem(card.dataset.id);
@@ -560,7 +601,7 @@ $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed o
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); if (!attachModal.hidden) closeAttachModal(); if (pendingCoverId) clearArmed(); }
+  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); if (!attachModal.hidden) closeAttachModal(); if (!wbModal.hidden) closeWhiteboard(); if (pendingCoverId) clearArmed(); }
   else if (e.key.toLowerCase() === "n" && !typing && addModal.hidden && noteModal.hidden && sectionModal.hidden && attachModal.hidden) { e.preventDefault(); openAddModal(); }
 });
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Dump — drop it here, we'll sort it out</title>
   <meta name="description" content="Dump links, reels, PDFs and screenshots. AI sorts them into the right shelf. Approve, and they flow into your library." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -75,6 +75,12 @@
         <!-- Four section columns -->
         <div class="section-col" data-section="reels">
           <div class="section-col-head"><span class="ic" data-icon="video"></span><h3>Reels</h3><span class="section-col-count" data-scount="reels">0</span></div>
+          <div class="reels-selbar" id="reelsSelBar" hidden>
+            <label class="reels-selall"><input type="checkbox" id="reelsSelectAll" /><span>Select all</span></label>
+            <button class="btn btn-primary btn-sm" id="approveReelsBtn" disabled>
+              <span class="ic" data-icon="check"></span> Approve <span id="reelsSelCount">0</span>
+            </button>
+          </div>
           <div class="section-col-body" data-body="reels"></div>
         </div>
         <div class="section-col" data-section="pdfs">
@@ -93,6 +99,46 @@
     </section>
   </main>
 
+  <!-- Attach modal (attach items to a reel) -->
+  <div class="modal-overlay" id="attachModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="attachModalTitle">
+      <div class="modal-head">
+        <h3 id="attachModalTitle">Attach to this reel</h3>
+        <button class="icon-btn" id="attachModalClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="attachModalSub">Attach a PDF, link, doc or screenshot — it's kept with this reel.</p>
+      <input type="text" id="attachLinkInput" class="modal-input" placeholder="Paste a link, then press Enter…" autocomplete="off" />
+      <label class="modal-drop" id="attachDrop">
+        <input type="file" id="attachFileInput" multiple hidden
+               accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+        <span class="ic" data-icon="upload"></span>
+        <span>Click to browse files &amp; PDFs</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="attachCancel">Cancel</button>
+        <button class="btn btn-primary" id="attachSubmit">Attach</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Whiteboard thumbnail modal -->
+  <div class="modal-overlay" id="wbModal" hidden>
+    <div class="modal wb-modal" role="dialog" aria-modal="true" aria-labelledby="wbTitle">
+      <div class="modal-head">
+        <h3 id="wbTitle">Whiteboard thumbnail</h3>
+        <button class="icon-btn" id="wbClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub">Write text and set it as this reel's thumbnail.</p>
+      <canvas id="wbCanvas" class="wb-canvas" width="800" height="500"></canvas>
+      <textarea id="wbText" class="modal-input wb-text" rows="2" placeholder="Type your thumbnail text…"></textarea>
+      <div class="wb-swatches" id="wbSwatches"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="wbCancel">Cancel</button>
+        <button class="btn btn-primary" id="wbApply">Add as thumbnail</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Note modal -->
   <div class="modal-overlay" id="noteModal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
@@ -105,6 +151,25 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" id="noteClear">Clear note</button>
         <button class="btn btn-primary" id="noteSave">Save note</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Approve selected reels → choose a section -->
+  <div class="modal-overlay" id="reelSectionModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reelSecTitle">
+      <div class="modal-head">
+        <h3 id="reelSecTitle">Approve reels to a section</h3>
+        <button class="icon-btn" id="reelSecClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub" id="reelSecSub">Choose which section these reels should be filed in.</p>
+      <div class="reel-sec-list" id="reelSecList"></div>
+      <div class="reel-sec-newwrap" id="reelSecNewWrap" hidden>
+        <input type="text" id="reelSecNewInput" class="modal-input" placeholder="New section name…" autocomplete="off" maxlength="60" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="reelSecCancel">Cancel</button>
+        <button class="btn btn-primary" id="reelSecConfirm" disabled>Approve &amp; file</button>
       </div>
     </div>
   </div>

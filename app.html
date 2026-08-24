@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Dump — your library</title>
   <meta name="description" content="Upload a PDF or image, jot a note, or save a link. Your calm home for research." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -192,6 +192,24 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" id="attachCancel">Cancel</button>
         <button class="btn btn-primary" id="attachSubmit">Attach</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Whiteboard thumbnail modal -->
+  <div class="modal-overlay" id="wbModal" hidden>
+    <div class="modal wb-modal" role="dialog" aria-modal="true" aria-labelledby="wbTitle">
+      <div class="modal-head">
+        <h3 id="wbTitle">Whiteboard thumbnail</h3>
+        <button class="icon-btn" id="wbClose" aria-label="Close"><span class="ic" data-icon="x"></span></button>
+      </div>
+      <p class="modal-sub">Write text and set it as this reel's thumbnail.</p>
+      <canvas id="wbCanvas" class="wb-canvas" width="800" height="500"></canvas>
+      <textarea id="wbText" class="modal-input wb-text" rows="2" placeholder="Type your thumbnail text…"></textarea>
+      <div class="wb-swatches" id="wbSwatches"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="wbCancel">Cancel</button>
+        <button class="btn btn-primary" id="wbApply">Add as thumbnail</button>
       </div>
     </div>
   </div>
