@@ -203,6 +203,7 @@ const ICONS = {
   mail: SVG('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'),
   lock: SVG('<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
   camera: SVG('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>'),
+  type: SVG('<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/>'),
 };
 
 const TYPE_META = {
@@ -327,4 +328,55 @@ function clipboardImageFiles(e) {
     }
   }
   return out;
+}
+
+
+/* ---------------- Whiteboard: text -> thumbnail image ---------------- */
+const WB_THEMES = [
+  { bg: "#7d3320", fg: "#fdf6ec" }, // rust
+  { bg: "#f6f1e8", fg: "#3c2a1f" }, // paper
+  { bg: "#b0603a", fg: "#ffffff" }, // terracotta
+  { bg: "#2a2018", fg: "#f0dcc2" }, // espresso
+  { bg: "#35543f", fg: "#f2f7f0" }, // forest
+];
+
+function _wbWrap(ctx, text, maxW) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? cur + " " + w : w;
+    if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; }
+    else cur = test;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// Draw wrapped, centered text onto a canvas using a theme (bg/fg).
+function renderWhiteboard(canvas, text, theme) {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(0, 0, W, H);
+  const display = (text || "").trim() || "Your text";
+  ctx.fillStyle = theme.fg;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const family = '"Fraunces", Georgia, "Times New Roman", serif';
+  const maxW = W * 0.84;
+  let size = Math.floor(H * 0.24), lines = [];
+  for (; size >= 16; size -= 2) {
+    ctx.font = `600 ${size}px ${family}`;
+    lines = _wbWrap(ctx, display, maxW);
+    const lineH = size * 1.22;
+    if (lines.length * lineH <= H * 0.86 && lines.every((l) => ctx.measureText(l).width <= maxW)) break;
+  }
+  const lineH = size * 1.22;
+  let y = H / 2 - (lines.length * lineH) / 2 + lineH / 2;
+  for (const line of lines) { ctx.fillText(line, W / 2, y); y += lineH; }
+}
+
+function whiteboardBlob(canvas) {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png", 0.92));
 }

@@ -171,7 +171,8 @@ function thumbFor(item) {
   }
   const coverTitle = item.hasCover ? "Replace cover — click, then Ctrl+V" : "Add cover — click, then Ctrl+V";
   const armed = item.id === pendingCoverId;
-  return `<div class="dcard-thumb ${overlay ? "" : "tinted"} ${armed ? "cover-armed" : ""}"><button class="cover-btn ${armed ? "armed" : ""}" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}${armed ? '<span class="cover-hint">Press Ctrl+V</span>' : ""}</div>`;
+  const wb = (item.category === "reel" || item.category === "video") ? `<button class="wb-btn" data-wb-open="${item.id}" title="Whiteboard thumbnail">${ICONS.type}</button>` : "";
+  return `<div class="dcard-thumb ${overlay ? "" : "tinted"} ${armed ? "cover-armed" : ""}">${wb}<button class="cover-btn ${armed ? "armed" : ""}" data-cover="${item.id}" title="${coverTitle}">${ICONS.camera}</button><span class="thumb-ic ic">${ICONS[meta.icon]}</span>${overlay}${armed ? '<span class="cover-hint">Press Ctrl+V</span>' : ""}</div>`;
 }
 
 function sectionSelect(item) {
@@ -336,6 +337,45 @@ async function attachFiles(fileList) {
 }
 function submitAttach() { if (attachLinkInput.value.trim()) { attachLink(attachLinkInput.value); closeAttachModal(); } }
 
+/* ---------------- Whiteboard thumbnail (reels) ---------------- */
+let wbTargetId = null, wbTheme = WB_THEMES[0];
+const wbModal = $("#wbModal");
+const wbCanvas = $("#wbCanvas");
+const wbText = $("#wbText");
+const wbSwatches = $("#wbSwatches");
+function wbBuildSwatches() {
+  wbSwatches.innerHTML = WB_THEMES.map((t, i) =>
+    `<button class="wb-swatch ${t === wbTheme ? "active" : ""}" data-wb="${i}" style="background:${t.bg};color:${t.fg}">Aa</button>`).join("");
+}
+function wbRefresh() { renderWhiteboard(wbCanvas, wbText.value, wbTheme); }
+function openWhiteboard(id) {
+  wbTargetId = id; wbText.value = ""; wbTheme = WB_THEMES[0];
+  wbBuildSwatches(); wbModal.hidden = false; wbRefresh();
+  setTimeout(() => wbText.focus(), 40);
+}
+function closeWhiteboard() { wbModal.hidden = true; wbTargetId = null; }
+wbText.addEventListener("input", wbRefresh);
+wbSwatches.addEventListener("click", (e) => { const b = e.target.closest("[data-wb]"); if (!b) return; wbTheme = WB_THEMES[+b.dataset.wb]; wbBuildSwatches(); wbRefresh(); });
+$("#wbClose").addEventListener("click", closeWhiteboard);
+$("#wbCancel").addEventListener("click", closeWhiteboard);
+wbModal.addEventListener("click", (e) => { if (e.target === wbModal) closeWhiteboard(); });
+$("#wbApply").addEventListener("click", async () => {
+  const id = wbTargetId;
+  if (!id) return;
+  if (!wbText.value.trim()) { toast("Write some text first"); return; }
+  const blob = await whiteboardBlob(wbCanvas);
+  const file = new File([blob], "whiteboard.png", { type: "image/png" });
+  closeWhiteboard();
+  toast("Setting thumbnail…");
+  try {
+    const updated = await Items.setCover(id, file);
+    const it = staged.find((s) => s.id === id);
+    if (it) { it.hasCover = true; it.coverUrl = updated.coverUrl; }
+    render();
+    toast("Thumbnail set");
+  } catch (e) { toast(e.message); }
+});
+
 /* ---------------- Auth link in nav ---------------- */
 function setupAuthLink() {
   const wrap = document.getElementById("authArea");
@@ -379,7 +419,7 @@ attachFileInput.addEventListener("change", () => { attachFiles(attachFileInput.f
 attachModal.addEventListener("click", (e) => { if (e.target === attachModal) closeAttachModal(); });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { if (!attachModal.hidden) closeAttachModal(); else if (!noteModal.hidden) closeNoteModal(); else if (pendingCoverId) clearArmed(); }
+  if (e.key === "Escape") { if (!wbModal.hidden) closeWhiteboard(); else if (!attachModal.hidden) closeAttachModal(); else if (!noteModal.hidden) closeNoteModal(); else if (pendingCoverId) clearArmed(); }
 });
 
 $("#sections").addEventListener("click", (e) => {
@@ -389,6 +429,7 @@ $("#sections").addEventListener("click", (e) => {
   const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
   const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
   const attach = e.target.closest("[data-attach]"); if (attach) return openAttachModal(attach.getAttribute("data-attach"));
+  const wbOpen = e.target.closest("[data-wb-open]"); if (wbOpen) return openWhiteboard(wbOpen.getAttribute("data-wb-open"));
   const openAtt = e.target.closest("[data-open-att]");
   if (openAtt) { const a = staged.find((s) => s.id === openAtt.getAttribute("data-open-att")); if (a) { const href = a.hasFile ? Items.fileUrl(a) : canonicalGoogleUrl(a.url); if (href) window.open(href, "_blank", "noopener"); } return; }
   const card = e.target.closest(".dcard.is-openable");

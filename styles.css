@@ -906,3 +906,27 @@ body {
 }
 .att-add:hover { color: var(--terra); border-color: var(--terra); background: var(--panel); }
 .att-add svg { width: 14px; height: 14px; }
+
+
+/* ============================================================
+   Whiteboard thumbnail (reels): button + modal
+   ============================================================ */
+.wb-btn {
+  position: absolute; top: 9px; right: 9px; z-index: 4;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter: blur(4px);
+  border: 1px solid var(--line); color: var(--ink-2); cursor: pointer;
+  transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.15s var(--ease);
+}
+.wb-btn svg { width: 15px; height: 15px; }
+.wb-btn:hover { color: var(--terra); background: var(--panel); transform: scale(1.08); }
+/* In the library, the star sits top-right — drop the whiteboard button just below it */
+.item-thumb .wb-btn { top: 47px; }
+
+.wb-modal { max-width: 520px; }
+.wb-canvas { width: 100%; aspect-ratio: 16 / 10; border: 1px solid var(--line-2); border-radius: 12px; display: block; margin-bottom: 12px; background: #fff; }
+.wb-text { width: 100%; resize: vertical; min-height: 56px; font-family: inherit; font-size: 14px; }
+.wb-swatches { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.wb-swatch { width: 42px; height: 34px; border-radius: 9px; border: 2px solid var(--line-2); cursor: pointer; font-family: var(--serif); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease); }
+.wb-swatch.active { border-color: var(--terra); box-shadow: 0 0 0 2px color-mix(in srgb, var(--terra) 30%, transparent); }
