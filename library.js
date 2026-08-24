@@ -136,8 +136,10 @@ function sortList(list) {
     return sortOrder === "old" ? a.createdAt - b.createdAt : b.createdAt - a.createdAt;
   });
 }
+function attachmentsOf(id) { return items.filter((a) => a.parentId === id); }
+
 function baseFor(view) {
-  let list = items.slice();
+  let list = items.filter((i) => !i.parentId); // attachments live inside their reel, not top-level
   if (view === "starred") list = list.filter((i) => i.starred);
   else if (view === "pinned") list = list.filter((i) => i.pinned);
   else if (view === "notes") list = list.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note");
@@ -193,6 +195,21 @@ function noteSnippet(item) {
 function controlsRow(item) {
   return `<div class="item-controls">${pinBtn(item)}${sectionSelect(item)}</div>`;
 }
+function attachmentsHtml(item) {
+  if (item.category !== "reel" && item.category !== "video") return "";
+  const atts = attachmentsOf(item.id);
+  const chips = atts.map((a) => {
+    const meta = TYPE_META[a.category] || TYPE_META.link;
+    return `<span class="att-chip" data-open-att="${a.id}" title="${esc(a.title)}">
+      <span class="ic">${ICONS[meta.icon]}</span><span class="att-title">${esc(a.title)}</span>
+      <button class="att-del" data-del="${a.id}" title="Remove attachment">${ICONS.x}</button>
+    </span>`;
+  }).join("");
+  return `<div class="attachments">
+    ${atts.length ? `<div class="att-list">${chips}</div>` : ""}
+    <button class="att-add" data-attach="${item.id}"><span class="ic">${ICONS.plus}</span> Attach PDF, link or doc</button>
+  </div>`;
+}
 function cardHtml(item) {
   if (item.category === "note") {
     return `<article class="item-card" data-id="${item.id}">
@@ -212,6 +229,7 @@ function cardHtml(item) {
     </div>
     <div class="item-actions">${noteBtn(item)}<button class="item-del" data-del="${item.id}" title="Delete">${ICONS.trash}</button></div>
     ${controlsRow(item)}
+    ${attachmentsHtml(item)}
   </article>`;
 }
 
@@ -262,10 +280,11 @@ function renderSectionsManager() {
 }
 
 function updateCounts() {
-  const counts = { all: items.length, reels: 0, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
-  items.forEach((it) => { counts[bucketOf(it.category)]++; if (it.starred) counts.starred++; if (it.pinned) counts.pinned++; });
+  const top = items.filter((i) => !i.parentId); // exclude attachments from top-level counts
+  const counts = { all: top.length, reels: 0, docs: 0, notes: 0, links: 0, images: 0, starred: 0, pinned: 0, sections: sections.length };
+  top.forEach((it) => { counts[bucketOf(it.category)]++; if (it.starred) counts.starred++; if (it.pinned) counts.pinned++; });
   // Notes = items you've annotated + standalone note items
-  counts.notes = items.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note").length;
+  counts.notes = top.filter((i) => (i.annotation && i.annotation.trim()) || i.category === "note").length;
   document.querySelectorAll("[data-count]").forEach((el) => { el.textContent = counts[el.dataset.count] ?? 0; });
 }
 
@@ -394,8 +413,70 @@ window.addEventListener("paste", (e) => {
   const id = pendingCoverId; clearArmed(); applyCover(id, imgs[0]);
 });
 
+/* ---------------- Attach modal (attach items to a reel) ---------------- */
+let attachTargetId = null;
+const attachModal = $("#attachModal");
+const attachLinkInput = $("#attachLinkInput");
+const attachFileInput = $("#attachFileInput");
+const attachModalSub = $("#attachModalSub");
+function openAttachModal(reelId) {
+  const it = items.find((x) => x.id === reelId); if (!it) return;
+  attachTargetId = reelId;
+  attachLinkInput.value = "";
+  attachModalSub.textContent = `Attach to “${it.title}”`;
+  attachModal.hidden = false;
+  setTimeout(() => attachLinkInput.focus(), 40);
+}
+function closeAttachModal() { attachModal.hidden = true; attachTargetId = null; }
+async function attachLink(raw) {
+  const reelId = attachTargetId;
+  const parts = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!reelId || !parts.length) return;
+  let added = 0, dups = 0;
+  for (const part of parts) {
+    const info = detectLink(part);
+    try {
+      const item = await Items.create({
+        kind: info.url ? "link" : "note", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: info.subtitle || info.domain || "", url: info.url,
+        note: info.category === "note" ? info.title : null, thumbnail: info.thumbnail || null,
+        approved: true, analyze: false, parent_id: reelId,
+      });
+      if (item.duplicate) { dups++; continue; }
+      items.push(item); added++;
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  if (added) toast(added > 1 ? `Attached ${added} items` : "Attached");
+  else if (dups) toast("Already attached");
+}
+async function attachFiles(fileList) {
+  const reelId = attachTargetId;
+  const files = Array.from(fileList);
+  if (!reelId || !files.length) return;
+  for (const file of files) {
+    const info = detectFile(file);
+    try {
+      const payload = await Items.fileToPayload(file, {
+        kind: "file", category: info.category, section: sectionOf(info.category),
+        title: info.title, subtitle: humanSize(file.size), approved: true, analyze: false, parent_id: reelId,
+      });
+      items.push(await Items.create(payload));
+    } catch (e) { return toast(e.message); }
+  }
+  render();
+  toast(files.length > 1 ? `Attached ${files.length} files` : "File attached");
+}
+function submitAttach() { if (attachLinkInput.value.trim()) { attachLink(attachLinkInput.value); closeAttachModal(); } }
+
 /* ---------------- Wiring ---------------- */
 $("#newSectionBtn").addEventListener("click", openSectionModal);
+$("#attachModalClose").addEventListener("click", closeAttachModal);
+$("#attachCancel").addEventListener("click", closeAttachModal);
+$("#attachSubmit").addEventListener("click", submitAttach);
+attachLinkInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAttach(); });
+attachFileInput.addEventListener("change", () => { attachFiles(attachFileInput.files); attachFileInput.value = ""; closeAttachModal(); });
+attachModal.addEventListener("click", (e) => { if (e.target === attachModal) closeAttachModal(); });
 $("#addBtn").addEventListener("click", openAddModal);
 $("#addModalClose").addEventListener("click", closeAddModal);
 $("#addCancel").addEventListener("click", closeAddModal);
@@ -438,9 +519,11 @@ mainEl.addEventListener("click", (e) => {
   const pin = e.target.closest("[data-pin]"); if (pin) return togglePin(pin.getAttribute("data-pin"));
   const note = e.target.closest("[data-note]"); if (note) return openNoteModal(note.getAttribute("data-note"));
   const cover = e.target.closest("[data-cover]"); if (cover) return pickCover(cover.getAttribute("data-cover"));
+  const openAtt = e.target.closest("[data-open-att]"); if (openAtt) return openItem(openAtt.getAttribute("data-open-att"));
+  const attach = e.target.closest("[data-attach]"); if (attach) return openAttachModal(attach.getAttribute("data-attach"));
   // Click the card body -> open the item (reel / link / file)
   const card = e.target.closest(".item-card.is-openable");
-  if (card && !e.target.closest("button, select, a, .item-actions, .item-controls")) openItem(card.dataset.id);
+  if (card && !e.target.closest("button, select, a, .item-actions, .item-controls, .attachments")) openItem(card.dataset.id);
 });
 mainEl.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-section]");
@@ -477,8 +560,8 @@ $("#logoutBtn").addEventListener("click", () => { Auth.logout(); toast("Signed o
 document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchInput.focus(); searchInput.select(); }
-  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); if (pendingCoverId) clearArmed(); }
-  else if (e.key.toLowerCase() === "n" && !typing && addModal.hidden && noteModal.hidden && sectionModal.hidden) { e.preventDefault(); openAddModal(); }
+  else if (e.key === "Escape") { if (!sectionModal.hidden) closeSectionModal(); if (!noteModal.hidden) closeNoteModal(); if (!addModal.hidden) closeAddModal(); if (!attachModal.hidden) closeAttachModal(); if (pendingCoverId) clearArmed(); }
+  else if (e.key.toLowerCase() === "n" && !typing && addModal.hidden && noteModal.hidden && sectionModal.hidden && attachModal.hidden) { e.preventDefault(); openAddModal(); }
 });
 
 /* ---------------- Boot ---------------- */

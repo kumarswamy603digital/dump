@@ -99,6 +99,7 @@ ensureColumn("items", "section_id", "TEXT");
 ensureColumn("items", "annotation", "TEXT");
 ensureColumn("items", "cover_data", "BLOB");
 ensureColumn("items", "cover_mime", "TEXT");
+ensureColumn("items", "parent_id", "TEXT");
 
 /* ---------------- Crypto helpers ---------------- */
 function hashPassword(pw) {
@@ -365,6 +366,7 @@ function rowToItem(r) {
     fileUrl: r.file_name ? `/api/files/${r.id}` : null,
     hasCover: !!r.cover_mime,
     coverUrl: r.cover_mime ? `/api/covers/${r.id}` : null,
+    parentId: r.parent_id || null,
   };
 }
 
@@ -572,7 +574,8 @@ async function handleApi(req, res, url) {
     const rows = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL ORDER BY created_at ASC").all(user.id);
     const groups = new Map();
     for (const r of rows) {
-      const k = normUrl(r.url); if (!k) continue;
+      const nk = normUrl(r.url); if (!nk) continue;
+      const k = (r.parent_id || "") + "|" + nk; // dedupe within the same container
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(r);
     }
@@ -608,7 +611,9 @@ async function handleApi(req, res, url) {
     // De-duplicate: if this URL already exists for the user, return the existing item.
     if (b.url) {
       const nu = normUrl(b.url);
-      const dup = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL").all(user.id).find((r) => normUrl(r.url) === nu);
+      const pid = b.parent_id || null;
+      const dup = db.prepare("SELECT * FROM items WHERE user_id = ? AND url IS NOT NULL").all(user.id)
+        .find((r) => (r.parent_id || null) === pid && normUrl(r.url) === nu);
       if (dup) return send(res, 200, { item: rowToItem(dup), duplicate: true, ocrUrls: [] });
     }
 
@@ -640,13 +645,20 @@ async function handleApi(req, res, url) {
       if (og) thumbnail = og;
     }
 
+    // Validate an optional parent (attaching to a reel/container).
+    let parentId = null;
+    if (b.parent_id) {
+      const par = db.prepare("SELECT id FROM items WHERE id = ? AND user_id = ?").get(b.parent_id, user.id);
+      if (par) parentId = b.parent_id;
+    }
+
     db.prepare(`INSERT INTO items
-      (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      (id, user_id, kind, category, section, title, subtitle, url, note, thumbnail, mime, file_name, file_data, approved, starred, pinned, parent_id, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       id, user.id, b.kind || null, b.category || null, section,
       b.title || null, b.subtitle || null, b.url || null, b.note || null,
       thumbnail, mime, fileName, fileBuf,
-      b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, Date.now()
+      b.approved ? 1 : 0, b.starred ? 1 : 0, b.pinned ? 1 : 0, parentId, Date.now()
     );
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
 
@@ -678,6 +690,13 @@ async function handleApi(req, res, url) {
         sets.push("section_id = ?"); vals.push(b.section_id);
       } else { sets.push("section_id = ?"); vals.push(null); }
     }
+    if ("parent_id" in b) {
+      if (b.parent_id) {
+        const par = db.prepare("SELECT id FROM items WHERE id = ? AND user_id = ?").get(b.parent_id, user.id);
+        if (!par) return send(res, 400, { error: "Unknown parent" });
+        sets.push("parent_id = ?"); vals.push(b.parent_id);
+      } else { sets.push("parent_id = ?"); vals.push(null); }
+    }
     if (typeof b.title === "string") { sets.push("title = ?"); vals.push(b.title); }
     if (!sets.length) return send(res, 400, { error: "Nothing to update" });
     vals.push(itemMatch[1], user.id);
@@ -688,7 +707,8 @@ async function handleApi(req, res, url) {
   if (itemMatch && method === "DELETE") {
     const user = authUser(req, url);
     if (!user) return send(res, 401, { error: "Not authenticated" });
-    db.prepare("DELETE FROM items WHERE id = ? AND user_id = ?").run(itemMatch[1], user.id);
+    // Delete the item and any attachments it holds (attachments live with their reel).
+    db.prepare("DELETE FROM items WHERE (id = ? OR parent_id = ?) AND user_id = ?").run(itemMatch[1], itemMatch[1], user.id);
     return send(res, 200, { ok: true });
   }
 
